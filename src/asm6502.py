@@ -20,7 +20,7 @@ class asm6502():
         for i in xrange(0,65536):
             self.object_code.append(-1)     # -1 indicate location not populated
 
-        self.littleendian = True  # Use le and be directives to change this
+        self.littleendian = False  # Use le and be directives to change this
         
         self.genopcodelist()         # generate the tables
         self.build_opcode_map()
@@ -989,7 +989,7 @@ class asm6502():
         if (opcode == None):
             f = "    "
         else:
-            f = opcode.ljust(4)
+            f = opcode.ljust(4).upper()
 
         if (operand == None):
             g = "          "
