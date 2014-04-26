@@ -1233,7 +1233,61 @@ class asm6502():
                     print "*"
                     printed_a_star = 1
                 i = i + 1
-                
+
+    def intelhex(self):
+        #print "INTEL HEX FORMAT OUTPUT"
+        #print
+        # Insert a star when there are empty spots in the memory map
+        i = 0
+        astring = ""
+        theoutput = list()
+        bytelist = list()
+        bytecount=0
+        address=0
+        
+        datarecord="00"
+        eofrecord=":00000001FF"
+        
+        while (i < 65536):
+            if self.object_code[i] != -1:
+                address = i
+                values =list()
+                values.append(self.object_code[i])
+                localrun = 1
+                i = i + 1
+                if (i<65536):
+                    nextval = self.object_code[i]
+                    while (nextval != -1) and (localrun < 16):
+                        values.append(nextval)
+                        i = i + 1
+                        localrun = localrun + 1
+                        if (i<65536):
+                            nextval = self.object_code[i]
+                        else:
+                            nextval = -1
+                    length = len(values)
+                    astring = ":%02X%04x" % (length,address)
+                    astring += datarecord
+                    for value in values:
+                        astring += "%02X" % value
+                    theoutput.append(astring)
+                    
+                else:
+                    length = len(values)
+                    astring = "addr=%04x  len=%02x data=" % (address, length)
+                    for value in values:
+                        astring += "%02X" % value
+                    theoutput.append(astring)
+            else:
+                i=i+1
+        theoutput.append(eofrecord)
+        return theoutput
+        
+    def print_intelhex(self):
+        lines = self.intelhex()
+        for line in lines:
+            print line
+        
 def go(debug=0):  
     lines = list()
     lines.append("    ADC #$55	    ")
