@@ -1,7 +1,7 @@
 import re
 
 class asm6502():
-    def __init__(self, debug=1):
+    def __init__(self, debug=0):
         print "65C02 Assembler"
         self.debuglevel = debug
         self.text_of_lines = list() #of strings
