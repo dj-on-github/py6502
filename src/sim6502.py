@@ -741,7 +741,7 @@ class sim6502:
 
     # Instruction BPL
     # 10 55    bpl $55  
-    def instr_bne(self,addrmode,opcode,operand8,operand16):
+    def instr_bpl(self,addrmode,opcode,operand8,operand16):
         if (self.cc & 0x80)==0x00:
             addr = (self.pc + operand8) % 256
             self.pc = addr
@@ -750,7 +750,7 @@ class sim6502:
 
     # Instruction BRA
     # 80 55    bra $55  
-    def instr_bne(self,addrmode,opcode,operand8,operand16):
+    def instr_bra(self,addrmode,opcode,operand8,operand16):
         addr = (self.pc + operand8) % 256
         self.pc = addr
     

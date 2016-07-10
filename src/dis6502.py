@@ -337,6 +337,13 @@ class dis6502:
             operandtext = "$%04x,x" % operand16
         elif addrmode == "indirect":
             operandtext = "($%04x)" % operand16
+        elif addrmode == "relative":
+            if operand8 < 128:
+                operandtext = "+$%02x" % operand8
+            else:
+                offset = (operand7 & 0xff) -128
+                offset = math.abs(offset)
+                operandtext = "-$%02x" %offset
         elif addrmode == "accumulator":
             operandtext = "A" 
         elif addrmode == "implicit":
