@@ -252,26 +252,44 @@ def go(debug=0):
     lines.append("    ORG $2000")
 
 
+    # Instantiate the assembler, assemble the code, grab the object_code
     a = asm6502.asm6502(debug=debug)
     a.assemble(lines)
     object_code = a.object_code[:]
-    print "a.symbols:"
-    print a.symbols
-    s = sim6502.sim6502(object_code, symbols=a.symbols)
-    s.show_state()
 
+    # Output IntelHex
+    print "IntelHex"
+    a.print_intelhex()
+
+    #instantiate the simulator
+    s = sim6502.sim6502(object_code, symbols=a.symbols)
+
+    # Instantiate the disassembler
     d = dis6502.dis6502(object_code, symbols=a.symbols)
 
+    # How much space to accomodate the disassembly
+    status_indent = 35
+
+    # Reset the state of the simulator
     print "RESET"
     s.reset()
-    s.show_state()
-    for i in xrange(3):
-        #print "Calling d.disassemble(%04x)" % s.pc
+
+    # Print a header for the simulator/disassembler output
+    print (" "*status_indent) + " PC   X  Y  SP   Status"
+
+    # Print the initial state
+    print " ".ljust(status_indent) + " %04x %02x %02x %04x %02x" % (s.pc,s.x,s.y,s.sp,s.cc)
+
+    # Execute 100 instructions
+    for i in xrange(100):
+        # Disassemble the current instruction
         distxt = d.disassemble_line(s.pc)
-        print distxt        
-        #print "instruction "+str(i)+" ",
+
+        # Execute that instruction
         s.execute()
-        s.show_state()
+
+        # Print out the disassembled instruction followed by the simulator state
+        print distxt.ljust(status_indent) + " %04x %02x %02x %04x %02x" % (s.pc,s.x,s.y,s.sp,s.cc)
 
 
 go()

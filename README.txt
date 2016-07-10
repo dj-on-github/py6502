@@ -109,7 +109,14 @@ DDW comma_separated_list_of_32_bit_numbers ; $ prefix for hex
 DQW comma_separated_list_of_64_bit_numbers ; $ prefix for hex
 LE ; For multi word data (DW, DDW and DQW) sets the encoding to little endian
 BE ; For multi word data (DW, DDW and DQW) sets the encoding to big endian
-The assembler defaults to big endian.
+The assembler defaults to little endian.
+
+Prefixes
+--------
+
+$ for hex. $10 = 16
+@ for octal. @10 = 8
+& for a label pointer. &labelname = the 16 bit address of the label, only works with DW.
 
 Labels
 ------

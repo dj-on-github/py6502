@@ -338,7 +338,7 @@ class dis6502:
         elif addrmode == "indirect":
             operandtext = "($%04x)" % operand16
         elif addrmode == "accumulator":
-            operandtext = "A" % operand16
+            operandtext = "A" 
         elif addrmode == "implicit":
             operandtext = ""
         elif addrmode == "":
