@@ -424,6 +424,14 @@ class sim6502:
             addr = (self.object_code[addr+1] << 8) + self.object_code[addr]
             operand = self.object_code[addr] | (self.object_code[addr+1] << 8)
             length = 3
+        elif addrmode == "accumulator":
+            addr = None
+            operand = self.a
+            length = 1
+        elif addrmode == "implicit":
+            addr = None
+            operand = operand8
+            length = 2
         else:
             print "ERROR: Address mode %s not found" % addrmode
             print "     : PC = 0x%04x" % self.pc
@@ -437,12 +445,16 @@ class sim6502:
             length = 3
         elif addrmode == "indirect":
             indirectaddr = operand16
-            addr = (self.object_code[addr+1] << 8) + self.object_code[addr]
+            addr = (self.object_code[indirectaddr+1] << 8) + self.object_code[indirectaddr]
             length=3
         elif addrmode == "absoluteindexedindirect":
+            indirectaddr = operand16+self.x
+            addr = (self.object_code[indirectaddr+1] << 8) + self.object_code[indirectaddr]
+            length=3
+        elif addrmode == "absoluteindirect":
             indirectaddr = operand16
-            addr = (self.object_code[addr+1] << 8) + self.object_code[addr] + self.x
-            length=2
+            addr = (self.object_code[indirectaddr+1] << 8) + self.object_code[indirectaddr]
+            length=3
         else:
             print "ERROR: Address mode %s not found for JMP or JSR" % addrmode
             print "     : PC = 0x%04x" % self.pc
@@ -467,6 +479,7 @@ class sim6502:
             instruction,addrmode = self.hexcodes[opcode]
             if (instruction != ""):
                 methodname="instr_"+instruction
+                #print "METHODNAME:"+methodname
                 method = getattr(self, methodname, lambda: "nothing")         
                 method(addrmode,opcode,operand8,operand16)
         else:
@@ -776,7 +789,7 @@ class sim6502:
 
     # Instruction BVS
     # 70 55    bvs $55 
-    def instr_bvc(self,addrmode,opcode,operand8,operand16):
+    def instr_bvs(self,addrmode,opcode,operand8,operand16):
         if (self.cc & 0x40)==0x040:
             addr = (self.pc + operand8) % 256
             self.pc = addr
@@ -841,7 +854,7 @@ class sim6502:
     # C4 20    cpy $20       
     # CC 33 22 cpy $2233
     def instr_cpy(self,addrmode,opcode,operand8,operand16):
-        operand,addr,length = self.get_operand(saddrmode,opcode,operand8,operand16)
+        operand,addr,length = self.get_operand(addrmode,opcode,operand8,operand16)
         test = (self.y - operand) % 256
         self.make_flags_nz(test)
         self.pc += length
@@ -929,7 +942,7 @@ class sim6502:
  
     # Instruction INX
     # E8       inx
-    def instr_dex(self,addrmode,opcode,operand8,operand16):
+    def instr_inx(self,addrmode,opcode,operand8,operand16):
         operand,addr,length = self.get_operand(addrmode,opcode,operand8,operand16)
         result = (self.x + 1) % 256
         self.make_flags_nz(result)
@@ -938,7 +951,7 @@ class sim6502:
               
     # Instruction INY
     # C8       iny 
-    def instr_dex(self,addrmode,opcode,operand8,operand16):
+    def instr_iny(self,addrmode,opcode,operand8,operand16):
         operand,addr,length = self.get_operand(addrmode,opcode,operand8,operand16)
         result = (self.y + 1) % 256
         self.make_flags_nz(result)
@@ -1185,7 +1198,7 @@ class sim6502:
         else:
             carryin = 0
         # Get the operand based on the address mode
-        operand,addr,length = self.get_operand(addrmode, operand8, operand16)
+        operand,addr,length = self.get_operand(addrmode, opcode,operand8, operand16)
 
         # Do the subtract
         # Compute the carry

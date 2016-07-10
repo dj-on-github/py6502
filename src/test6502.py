@@ -9,6 +9,7 @@ def go(debug=0):
     lines.append("       org $0000")
     lines.append("    JMP overthere ")
     lines.append("bhaddr:    dw &brkhandler,$0102,&another,&labels ; insert address for brkhandler")
+    lines.append("l8addr:    dw &land8")
     lines.append("overthere:	      ")
     lines.append("    LDA bhaddr ")
     lines.append("    LDX 1 ")
@@ -62,6 +63,11 @@ def go(debug=0):
     lines.append("land6: ")
     lines.append("    BRA land7	    ")
     lines.append("land7: ")
+    lines.append("    LDA l8addr")
+    lines.append("    STA $fffe")
+    lines.append("    LDX #$01")
+    lines.append("    LDA l8addr,x")
+    lines.append("    STA $ffff")
     lines.append("    BRK	            ")
     lines.append("    BVC land8	    ")
     lines.append("land8: ")
@@ -111,10 +117,16 @@ def go(debug=0):
     lines.append("    INC $2233,X	    ")
     lines.append("    INX	            ")
     lines.append("    INY	            ")
-    lines.append("    JMP $2233	        ")
-    lines.append("    JMP ($2233)	    ")
-    lines.append("    JMP ($2233,X)	    ")
-    lines.append("    JSR $2233	        ")
+    lines.append("    JMP jmp1	        ")
+    lines.append("jmpa: dw &jmp2 ")
+    lines.append("      dw &jmp3 ")
+    lines.append("jmp1:")
+    lines.append("    JMP (jmpa)	    ")
+    lines.append("jmp2:")
+    lines.append("    ldx #$02 ")
+    lines.append("    JMP (jmpa,X)	    ")
+    lines.append("jmp3:")
+    lines.append("    JSR jsrhandler    ")
     lines.append("    LDA #$55	    ")
     lines.append("    LDA $20	        ")
     lines.append("    LDA $20,X	    ")
@@ -164,8 +176,8 @@ def go(debug=0):
     lines.append("    ROR $20,X	        ")
     lines.append("    ROR $2233	        ")
     lines.append("    ROR $2233,X	    ")
-    lines.append("    RTI	            ")
-    lines.append("    RTS	            ")
+    #lines.append("    RTI	            ")
+    #lines.append("    RTS	            ")
     lines.append("    SBC #$55	        ")
     lines.append("    SBC $20 	        ")
     lines.append("    SBC $20,X	        ")
@@ -208,6 +220,10 @@ def go(debug=0):
     lines.append("    TYA")
     lines.append("; A remark")
     lines.append("    JMP $1000 ")
+    lines.append("jsrhandler:")
+    lines.append("    nop")
+    lines.append("    nop")
+    lines.append("    rts")
     lines.append("brkhandler: ")
     lines.append("    NOP ")
     lines.append("    NOP ")
@@ -275,13 +291,13 @@ def go(debug=0):
     s.reset()
 
     # Print a header for the simulator/disassembler output
-    print (" "*status_indent) + " PC   X  Y  SP   Status"
+    print (" "*status_indent) + " PC   A  X  Y  SP   Status"
 
     # Print the initial state
-    print " ".ljust(status_indent) + " %04x %02x %02x %04x %02x" % (s.pc,s.x,s.y,s.sp,s.cc)
+    print " ".ljust(status_indent) + " %04x %02x %02x %02x %04x %02x" % (s.pc,s.a,s.x,s.y,s.sp,s.cc)
 
-    # Execute 100 instructions
-    for i in xrange(100):
+    # Execute 200 instructions
+    for i in xrange(200):
         # Disassemble the current instruction
         distxt = d.disassemble_line(s.pc)
 
@@ -289,7 +305,7 @@ def go(debug=0):
         s.execute()
 
         # Print out the disassembled instruction followed by the simulator state
-        print distxt.ljust(status_indent) + " %04x %02x %02x %04x %02x" % (s.pc,s.x,s.y,s.sp,s.cc)
+        print distxt.ljust(status_indent) + " %04x %02x %02x %02x %04x %02x" % (s.pc,s.a,s.x,s.y,s.sp,s.cc)
 
 
 go()

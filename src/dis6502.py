@@ -3,13 +3,20 @@
 #
 # The 65C02 Simulator
 #
+
+import math
+
 class dis6502:
     def __init__(self, object_code, symbols=None):
-        self.object_code = object_code[:]
 
-        if symbols==None:
+       self.object_code = object_code[:]
+       for i in xrange(len(self.object_code)):
+            if self.object_code[i] < 0:
+                self.object_code[i] = 0x00
+ 
+       if symbols==None:
             self.have_symbols = False
-        else:
+       else:
             self.have_symbols = True
             
             self.symbols = symbols
@@ -17,7 +24,7 @@ class dis6502:
             for label in self.symbols:
                 offset = self.symbols[label]
                 self.labels[offset]=label
-        self.build_opcode_table()
+       self.build_opcode_table()
 
     def build_opcode_table(self):
         self.hexcodes=dict()
@@ -302,6 +309,7 @@ class dis6502:
         operand8 = operandl
         operand16 = operandl + (operandh << 8)
 
+        #print "OPCODE_HEX = %x" % opcode_hex
         opcode,addrmode = self.hexcodes[opcode_hex]
         #print "DISASSEMBLER OPCD: %02x" % opcode_hex
         #print "DISASSMBLER OPCD TXT:"+str(opcode)+" "+str(addrmode)
@@ -333,6 +341,10 @@ class dis6502:
             operandtext = "$%04x,y" % operand16
         elif addrmode == "absolute":
             operandtext = "$%04x" % operand16
+        elif addrmode == "absoluteindirect":
+            operandtext = "($%04x)" % operand16
+        elif addrmode == "absoluteindexedindirect":
+            operandtext = "($%04x,x)" % operand16
         elif addrmode == "absolutex":
             operandtext = "$%04x,x" % operand16
         elif addrmode == "indirect":
