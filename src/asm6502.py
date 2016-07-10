@@ -1,7 +1,7 @@
 import re
 
 class asm6502():
-    def __init__(self, debug=0):
+    def __init__(self, debug=1):
         print "65C02 Assembler"
         self.debuglevel = debug
         self.text_of_lines = list() #of strings
@@ -20,7 +20,7 @@ class asm6502():
         for i in xrange(0,65536):
             self.object_code.append(-1)     # -1 indicate location not populated
 
-        self.littleendian = False  # Use le and be directives to change this
+        self.littleendian = True  # Use le and be directives to change this
         
         self.genopcodelist()         # generate the tables
         self.build_opcode_map()
@@ -180,6 +180,7 @@ class asm6502():
             premode = "numbercommay"
         elif (thestring[0] == '$') or (thestring[0] == '@') \
                                    or (thestring[0] == '%') \
+                                   or (thestring[0] == '&') \
                                    or (thestring[0] in self.decimal_digits):
             premode = "number"
             value = thestring
@@ -251,6 +252,7 @@ class asm6502():
             if (premode == "number"):
                 return "absolute"
             return "UNDECIDED"
+
         if (opcode in self.zeropageopcodes) and (premode == "number") and (self.decode_value(value) != -1):
             if (self.decode_value(value) < 256):
                 return "zeropage"
@@ -366,23 +368,38 @@ class asm6502():
                 emptylist = list()
                 return emptylist
         return newlist
-    
+
+    # Just count the number of bytes without working out what they are
+    def count_extrabytes(self,opcode,operand): 
+        count = len(operand.split(','))
+        if opcode == "db":
+            return count
+        elif opcode == "dw":
+            return count*2
+        elif opcode == "ddw":
+            return count*4
+        elif opcode == "dqw":
+            return count*8
+        else:
+            return None
+
     def decode_extrawords(self,linenumber, linetext, s):
-        newstring="["
-        for c in s:
-            if c=="$":
-                newstring = newstring + "0x"
-            elif c=="@":
-                newstring = newstring + "0"
+        csl = s.split(',')
+        newlist=list()
+        for theword in csl:
+            if theword[0]=='&':
+                label=theword[1:]
+                value = self.symbols[label]
+            elif theword[0]=='$':
+                value = eval("0x"+theword[1:]) 
+            elif theword[0]=='@':
+                value = eval("0"+theword[1:])
             else:
-                newstring = newstring + c
-        newstring = newstring + "]"
-        thelist = eval(newstring)
-        newlist = list()
-        for i in thelist:
-            if type(i) == int:
-                a = i & 0x00ff
-                b = (((i & 0xff00) >> 8) & 0x00ff)
+                value = eval(theword)
+
+            if type(value)==int: 
+                a = value & 0x00ff
+                b = (((value & 0xff00) >> 8) & 0x00ff)
                 if (self.littleendian == True):
                     newlist.append(a)
                     newlist.append(b)
@@ -397,6 +414,7 @@ class asm6502():
     
     def decode_extrabytes(self,linenumber, linetext, s):
         newstring="["
+
         for c in s:
             if c=="$":
                 newstring = newstring + "0x"
@@ -405,6 +423,8 @@ class asm6502():
             else:
                 newstring = newstring + c
         newstring = newstring + "]"
+
+        # Now parse the list
         thelist = eval(newstring)
         newlist = list()
         for i in thelist:
@@ -899,7 +919,7 @@ class asm6502():
             return 2
     
     def firstpasstext(self,thetuple):
-        (offset, linenumber,labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment, extrabytes) = thetuple
+        (offset, linenumber,labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment, extrabytes,num_extrabytes,linetext) = thetuple
         a = ("%d" % linenumber).ljust(4)
         if (labelstring != None):
             b = (": %s" % labelstring).ljust(10)
@@ -952,7 +972,7 @@ class asm6502():
         return astring
 
     def secondpasstext(self,thetuple):
-        (offset, linenumber,labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment, extrabytes) = thetuple
+        (offset, linenumber,labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment, extrabytes, num_extrabytes,linetext) = thetuple
         a = ("%d " % linenumber).ljust(5)
         aa = ("%04X " % offset)
         
@@ -989,7 +1009,7 @@ class asm6502():
         if (opcode == None):
             f = "    "
         else:
-            f = opcode.ljust(4).upper()
+            f = opcode.ljust(4)
 
         if (operand == None):
             g = "          "
@@ -1076,16 +1096,25 @@ class asm6502():
             
         # interpret extra bytes from the db, dw, ddw, dqw directives.
         extrabytes = list()
-        if (opcode=="db") and (operand != None) and (len(operand) > 0):
-            extrabytes = self.decode_extrabytes(linenumber, thestring, operand)
-        elif (opcode=="dw") and (operand != None) and (len(operand) > 0):
-            extrabytes = self.decode_extrawords(linenumber, thestring, operand)
-        elif (opcode=="ddw") and (operand != None) and (len(operand) > 0):
-            extrabytes = self.decode_extradoublewords(linenumber, thestring, operand)
-        elif (opcode=="dqw") and (operand != None) and (len(operand) > 0):
-            extrabytes = self.decode_extraquadwords(linenumber, thestring, operand)
-        
-        thetuple = (offset, linenumber,labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment, extrabytes)
+        if (opcode=="db" or opcode=="dw" or opcode=="ddw" or opcode=="dqw"):
+            num_extrabytes = self.count_extrabytes(opcode,operand)
+        else:
+            num_extrabytes = None
+
+        # We are moving the extrabytes parsing to pass 3, so we can
+        # add label addresses into DWs and have the label defined when we need it.
+        #
+        #if (opcode=="db") and (operand != None) and (len(operand) > 0):
+        #    extrabytes = self.decode_extrabytes(linenumber, thestring, operand)
+        #elif (opcode=="dw") and (operand != None) and (len(operand) > 0):
+        #    extrabytes = self.decode_extrawords(linenumber, thestring, operand)
+        #elif (opcode=="ddw") and (operand != None) and (len(operand) > 0):
+        #    extrabytes = self.decode_extradoublewords(linenumber, thestring, operand)
+        #elif (opcode=="dqw") and (operand != None) and (len(operand) > 0):
+        #    extrabytes = self.decode_extraquadwords(linenumber, thestring, operand)
+
+        linetext=thestring 
+        thetuple = (offset, linenumber,labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment, extrabytes, num_extrabytes,linetext)
         self.allstuff.append(thetuple)
         self.firstpasstext(thetuple)
         
@@ -1112,7 +1141,7 @@ class asm6502():
         #Add the offset to each line by counting the opcodes and operands
         for i in xrange(len(self.allstuff)):
             tuple = self.allstuff[i]
-            (offset, linenumber,labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment, extrabytes) = tuple
+            (offset, linenumber,labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment, extrabytes, num_extrabytes,linetext) = tuple
             # Handle ORG directive
             if (opcode=="org"):
                 newaddr = self.decode_value(value)
@@ -1126,12 +1155,14 @@ class asm6502():
                 self.address += 1
             if (highbyte != None):
                 self.address += 1
-            self.address += len(extrabytes)
+            #self.address += len(extrabytes)
+            if type(num_extrabytes)==int:
+                self.address += num_extrabytes
             
             # If there is a label, we now know its address. So store it in the symbol table
             if (labelstring != None) and (labelstring != ""):
                 self.symbols[labelstring] = offset
-            tuple = (offset, linenumber,labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment, extrabytes)
+            tuple = (offset, linenumber,labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment, extrabytes, num_extrabytes,linetext)
             self.allstuff[i] = tuple
             self.secondpasstext(tuple)
 
@@ -1148,7 +1179,7 @@ class asm6502():
         self.listing = list()
         for i in xrange(len(self.allstuff)):
             tuple = self.allstuff[i]
-            (offset, linenumber,labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment, extrabytes) = tuple        
+            (offset, linenumber,labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment, extrabytes, num_extrabytes,linetext) = tuple        
 
             if (lowbyte == -1) and (addressmode == "relative"):
                 destination = self.symbols[value]
@@ -1166,8 +1197,17 @@ class asm6502():
                         newvalue = self.symbols[value]
                         highbyte = ((newvalue & 0xff00)>>8) & 0x00ff
             
-                
-            tuple = (offset, linenumber,labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment, extrabytes)
+            # populate the extrabytes lists                
+            if (opcode=="db") and (operand != None) and (len(operand) > 0):
+                extrabytes = self.decode_extrabytes(linenumber, linetext, operand)
+            elif (opcode=="dw") and (operand != None) and (len(operand) > 0):
+                extrabytes = self.decode_extrawords(linenumber, linetext, operand)
+            elif (opcode=="ddw") and (operand != None) and (len(operand) > 0):
+                extrabytes = self.decode_extradoublewords(linenumber, linetext, operand)
+            elif (opcode=="dqw") and (operand != None) and (len(operand) > 0):
+                extrabytes = self.decode_extraquadwords(linenumber, linetext, operand)
+
+            tuple = (offset, linenumber,labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment, extrabytes, num_extrabytes,linetext)
             self.allstuff[i] = tuple
             line = self.secondpasstext(tuple)
             self.listing.append(line)
@@ -1288,223 +1328,3 @@ class asm6502():
         for line in lines:
             print line
         
-def go(debug=0):  
-    lines = list()
-    lines.append("    ADC #$55	    ")
-    lines.append("    ADC $20	        ")
-    lines.append("    ADC $20,X	    ")
-    lines.append("    ADC $2233	        ")
-    lines.append("    ADC $2233,X	    ")
-    lines.append("    ADC $2233,Y	    ")
-    lines.append("    ADC ($20,X)	    ")
-    lines.append("    ADC ($20),Y	    ")
-    lines.append("    ADC ($20)	    ")
-    lines.append("    AND #$55	    ")
-    lines.append("    AND $20	        ")
-    lines.append("    AND $20,X	    ")
-    lines.append("    AND $2233	        ")
-    lines.append("    AND $2233,X	    ")
-    lines.append("    AND $2233,Y	    ")
-    lines.append("    AND ($20,X)	    ")
-    lines.append("    AND ($20),Y	    ")
-    lines.append("    AND ($20)	    ")
-    lines.append("    ASL A	        ")
-    lines.append("    ASL $20	        ")
-    lines.append("    ASL $20,X	    ")
-    lines.append("    ASL $2233	        ")
-    lines.append("    ASL $2233,X	    	    ")
-    lines.append("    BCC $55	    ")
-    lines.append("    BCS $55	    ")
-    lines.append("    BEQ $55	    ")
-    lines.append("    BIT #$55	    ")
-    lines.append("    BIT $20	    ")
-    lines.append("    BIT $20,X	    ")
-    lines.append("    BIT $2233	    ")
-    lines.append("    BIT $2233,X	    ")
-    lines.append("    BMI $55	    ")
-    lines.append("    BNE $55	    ")
-    lines.append("    BPL $55	    ")
-    lines.append("    BRA $55	    ")
-    lines.append("    BRK	            ")
-    lines.append("    BVC $55	    ")
-    lines.append("    BVS $55	    ")
-    lines.append("    CLC	            ")
-    lines.append("    CLD	            ")
-    lines.append("    CLI	            ")
-    lines.append("    CLV	            ")
-    lines.append("    CMP #$55	    ")
-    lines.append("    CMP $20	        ")
-    lines.append("    CMP $20	        ")
-    lines.append("    CMP $2233	        ")
-    lines.append("    CMP $2233,X	    ")
-    lines.append("    CMP $2233,Y	    ")
-    lines.append("    CMP ($20,X)	    ")
-    lines.append("    CMP ($20),Y	    ")
-    lines.append("    CMP ($20)	    ")
-    lines.append("    CPX #$55	    ")
-    lines.append("    CPX $20	        ")
-    lines.append("    CPX $2233	        ")
-    lines.append("    CPY #$55	    ")
-    lines.append("    CPY $20	        ")
-    lines.append("    CPY $2233	        ")
-    lines.append("    DEA	            ")
-    lines.append("    DEC A	            ")
-    lines.append("    DEC $20	        ")
-    lines.append("    DEC $20,X	    ")
-    lines.append("    DEC $2233	        ")
-    lines.append("    DEC $2233,X	    ")
-    lines.append("    DEX	            ")
-    lines.append("    DEY	            ")
-    lines.append("    EOR #$55	    ")
-    lines.append("    EOR $20	        ")
-    lines.append("    EOR $20,X	    ")
-    lines.append("    EOR $2233	        ")
-    lines.append("    EOR $2233,X	    ")
-    lines.append("    EOR $2233,Y	    ")
-    lines.append("    EOR ($20,X)	    ")
-    lines.append("    EOR ($20),Y	    ")
-    lines.append("    EOR ($20)	    ")
-    lines.append("    INA")
-    lines.append("    INC A	            ")
-    lines.append("    INC $20	        ")
-    lines.append("    INC $20,X	    ")
-    lines.append("    INC $2233	        ")
-    lines.append("    INC $2233,X	    ")
-    lines.append("    INX	            ")
-    lines.append("    INY	            ")
-    lines.append("    JMP $2233	        ")
-    lines.append("    JMP ($2233)	    ")
-    lines.append("    JMP ($2233,X)	    ")
-    lines.append("    JSR $2233	        ")
-    lines.append("    LDA #$55	    ")
-    lines.append("    LDA $20	        ")
-    lines.append("    LDA $20,X	    ")
-    lines.append("    LDA $2233	        ")
-    lines.append("    LDA $2233,X	    ")
-    lines.append("    LDA $2233,Y	    ")
-    lines.append("    LDA ($20,X)	    ")
-    lines.append("    LDA ($20),Y	    ")
-    lines.append("    LDA ($20)	    ")
-    lines.append("    LDX #$55	    ")
-    lines.append("    LDX $20	        ")
-    lines.append("    LDX $20,Y	    ")
-    lines.append("    LDX $2233	        ")
-    lines.append("    LDX $2233,Y	    ")
-    lines.append("    LDY #$55	    ")
-    lines.append("    LDY $20	        ")
-    lines.append("    LDY $20,X	    ")
-    lines.append("    LDY $2233	        ")
-    lines.append("    LDY $2233,X	    ")
-    lines.append("    LSR A	        ")
-    lines.append("    LSR $20	        ")
-    lines.append("    LSR $20,X	    ")
-    lines.append("    LSR $2233	        ")
-    lines.append("    LSR $2233,X	    ")
-    lines.append("    NOP	            ")
-    lines.append("    ORA #$55	    ")
-    lines.append("    ORA $20	        ")
-    lines.append("    ORA $20,X	    ")
-    lines.append("    ORA $2233	        ")
-    lines.append("    ORA $2233,X	    ")
-    lines.append("    ORA $2233,Y	    ")
-    lines.append("    ORA ($20,X)	    ")
-    lines.append("    ORA ($20),Y	    ")
-    lines.append("    ORA ($20)	    ")
-    lines.append("    PHA	            ")
-    lines.append("    PHX	            ")
-    lines.append("    PHY	            ")
-    lines.append("    PLA	            ")
-    lines.append("    PLX	            ")
-    lines.append("    PLY	            ")
-    lines.append("    ROL A	        ")
-    lines.append("    ROL $20	        ")
-    lines.append("    ROL $20,X	    ")
-    lines.append("    ROL $2233	        ")
-    lines.append("    ROL $2233,X	    ")
-    lines.append("    ROR A	        ")
-    lines.append("    ROR $20	        ")
-    lines.append("    ROR $20,X	    ")
-    lines.append("    ROR $2233	        ")
-    lines.append("    ROR $2233,X	    ")
-    lines.append("    RTI	            ")
-    lines.append("    RTS	            ")
-    lines.append("    SBC #$55	    ")
-    lines.append("    SBC $20 	    ")
-    lines.append("    SBC $20,X	    ")
-    lines.append("    SBC $2233	        ")
-    lines.append("    SBC $2233,X	    ")
-    lines.append("    SBC $2233,Y	    ")
-    lines.append("    SBC ($20,X)	    ")
-    lines.append("    SBC ($20),Y	    ")
-    lines.append("    SBC ($20)	    ")
-    lines.append("    SEC	            ")
-    lines.append("    SED	            ")
-    lines.append("    SEI	            ")
-    lines.append("    STA $20	        ")
-    lines.append("    STA $20,X	    ")
-    lines.append("    STA $2233	        ")
-    lines.append("    STA $2233,X	    ")
-    lines.append("    STA $2233,Y	    ")
-    lines.append("    STA ($20,X)	    ")
-    lines.append("    STA ($20),Y	    ")
-    lines.append("    STA ($20)	    ")
-    lines.append("    STX $20	        ")
-    lines.append("    STX $20,Y	    ")
-    lines.append("    STX $2233	        ")
-    lines.append("    STY $20	        ")
-    lines.append("    STY $20,X	    ")
-    lines.append("    STY $2233	        ")
-    lines.append("    STZ $20	        ")
-    lines.append("    STZ $20,X	    ")
-    lines.append("    STZ $2233	        ")
-    lines.append("    STZ $2233,X	    ")
-    lines.append("    TAX	            ")
-    lines.append("    TAY	            ")
-    lines.append("    TRB $20	        ")
-    lines.append("    TRB $2233	        ")
-    lines.append("    TSB $20	        ")
-    lines.append("    TSB $2233	        ")
-    lines.append("    TSX	            ")
-    lines.append("    TXA	            ")
-    lines.append("    TXS	            ")
-    lines.append("    TYA")
-    lines.append("; A remark")
-    lines.append("       org $1000")
-    lines.append("start: lda #$50")
-    lines.append("       sta $5000 ; blah")
-    lines.append("       sta $25")
-    lines.append("       clc")
-    lines.append("       ROR A")
-    lines.append("       adc #%10011010")
-    lines.append("       sta %0101101000111100")
-    lines.append("       sta %00111100")
-    lines.append("       lda ($20)")
-    lines.append("       adc $10,x")
-    lines.append("middle:ldx $20,y")
-    lines.append("       adc $3000,x")
-    lines.append("       adc $3000,y")
-    lines.append("       adc ($40,x) ")
-    lines.append("       adc ($40),y")
-    lines.append("       nop")
-    lines.append("       nop")
-    lines.append("label:")
-    lines.append("       nop")
-    lines.append("       org $3000")
-    lines.append("vals:  db @10,$aa,8,$cc,$dd")
-    lines.append("       be")
-    lines.append("       dw $1020,$3040")
-    lines.append("       le")
-    lines.append("       dw $1020,$3040")
-    lines.append("       ddw $1020,$3040")
-    lines.append("       dqw $1020,$3040")
-    lines.append("       adc start")
-    lines.append("       adc ($40)")
-    lines.append("end:   bpl vals")
-    lines.append("       db $aa,$bb,$cc,$dd")
-    lines.append("       nop")
-
-    a = asm6502(debug=debug)
-    a.assemble(lines)
-
-
-    
