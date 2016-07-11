@@ -265,7 +265,6 @@ def go(debug=0):
     lines.append("       nop")
     lines.append("       org $fffc")
     lines.append("       db $00,$00")
-    lines.append("    ORG $2000")
 
 
     # Instantiate the assembler, assemble the code, grab the object_code
@@ -284,14 +283,16 @@ def go(debug=0):
     d = dis6502.dis6502(object_code, symbols=a.symbols)
 
     # How much space to accomodate the disassembly
-    status_indent = 35
+    status_indent = 39
 
     # Reset the state of the simulator
-    print "RESET"
     s.reset()
 
+    print
+    print "SIMULATION START"
+    print
     # Print a header for the simulator/disassembler output
-    print (" "*status_indent) + " PC   A  X  Y  SP   Status"
+    print ("LABEL      " + "ADDR HEX      INSTR").ljust(status_indent)+" PC   A  X  Y  SP   Status"
 
     # Print the initial state
     print " ".ljust(status_indent) + " %04x %02x %02x %02x %04x %02x" % (s.pc,s.a,s.x,s.y,s.sp,s.cc)
@@ -306,7 +307,6 @@ def go(debug=0):
 
         # Print out the disassembled instruction followed by the simulator state
         print distxt.ljust(status_indent) + " %04x %02x %02x %02x %04x %02x" % (s.pc,s.a,s.x,s.y,s.sp,s.cc)
-
 
 go()
 

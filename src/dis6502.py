@@ -313,42 +313,54 @@ class dis6502:
         opcode,addrmode = self.hexcodes[opcode_hex]
         #print "DISASSEMBLER OPCD: %02x" % opcode_hex
         #print "DISASSMBLER OPCD TXT:"+str(opcode)+" "+str(addrmode)
-        if opcode in self.labels:
-            label = self.labels[opcode].ljust(15) + " :"
+        if address in self.labels:
+            label = (self.labels[address]+":").ljust(10)
         else:
-            label = " "*17
+            label = " "*10
 
-        the_text =  label+" "
-        the_text += (opcode.ljust(5))
+        addr_text = "%04x " % address
 
         # Format the operand based on the addressmode
-        
+        length = 1 
         if addrmode == "zeropageindexedindirectx":
             operandtext = "($%02x,x)" % operand8
+            length = 2
         elif addrmode == "zeropageindexedindirecty":
             operandtext = "($%02x,y)" % operand8
+            length = 2
         elif addrmode == "zeropageindirect":
             operandtext = "($%02x)" % operand8
+            length = 2
         elif addrmode == "zeropage":
             operandtext = "$%02x" % operand8
+            length = 2
         elif addrmode == "zeropagex":
             operandtext = "$%02x,x" % operand8
+            length = 2
         elif addrmode == "zeropagey":
             operandtext = "$%02x,y" % operand8
+            length = 2
         elif addrmode == "immediate":
             operandtext = "#$%02x" % operand8
+            length = 2
         elif addrmode == "absolutey":
             operandtext = "$%04x,y" % operand16
+            length = 3
         elif addrmode == "absolute":
             operandtext = "$%04x" % operand16
+            length = 3
         elif addrmode == "absoluteindirect":
             operandtext = "($%04x)" % operand16
+            length = 3
         elif addrmode == "absoluteindexedindirect":
             operandtext = "($%04x,x)" % operand16
+            length = 3
         elif addrmode == "absolutex":
             operandtext = "$%04x,x" % operand16
+            length = 3
         elif addrmode == "indirect":
             operandtext = "($%04x)" % operand16
+            length = 3
         elif addrmode == "relative":
             if operand8 < 128:
                 operandtext = "+$%02x" % operand8
@@ -356,17 +368,32 @@ class dis6502:
                 offset = (operand7 & 0xff) -128
                 offset = math.abs(offset)
                 operandtext = "-$%02x" %offset
+            length = 2
         elif addrmode == "accumulator":
             operandtext = "A" 
+            length = 1
         elif addrmode == "implicit":
             operandtext = ""
+            length = 1
         elif addrmode == "":
             operandtext = ""
+            length = 1
         elif addrmode == None:
             operandtext = ""
+            length = 1
         else:
             print "ERROR: Disassembler: Address mode %s not found" % addrmode
             exit()
-        the_text += " "+operandtext
+
+        if length == 1:
+            binary_text = "%02x       " % opcode_hex
+        elif length == 2:
+            binary_text = "%02x %02x    " % (opcode_hex, operandl)
+        else:
+            binary_text = "%02x %02x %02x " % (opcode_hex, operandl, operandh)
+           
+        the_text =  label+" "+addr_text+binary_text
+        the_text += (opcode.ljust(5))
+        the_text += operandtext
         return (the_text)
 

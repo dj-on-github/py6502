@@ -471,8 +471,8 @@ class sim6502:
         if address==None:
             address = self.pc
         opcode = self.object_code[address]
-        operand8 = self.object_code[(address+1)% 256]
-        hi = self.object_code[(address+2) % 0x10000] 
+        operand8 = self.object_code[(address+1)% 65536]
+        hi = self.object_code[(address+2) % 65536] 
         operand16 = operand8 + ((hi << 8) & 0xff00)
 
         if (opcode >= 0) and (opcode < 256):
@@ -963,8 +963,10 @@ class sim6502:
     # 6C 33 22 jmp ($2233)   
     # 7C 33 22 jmp ($2233,X) 
     def instr_jmp(self,addrmode,opcode,operand8,operand16):
+        #print "INSTR_JMP CALLED addrmode = %s opcode=%02x operand8=%02x operand16=%04x" % (addrmode,opcode,operand8,operand16)
         operand,addr,length = self.get_operand16(addrmode,opcode,operand8,operand16)
-        #print "INSTR_JMP operand=%02x addr=%04x length=%d" % (operand,addr, length)
+        #print "INSTR_JMP operand   = %04x addr=%04x length=%d" % (operand,addr, length)
+        #print "INSTR_JMP operand16 = %04x " % operand16
         self.pc = addr    
     
     # Instruction JSR
@@ -1298,9 +1300,19 @@ class sim6502:
     # 04 20    tsb $20       
     # 0C 33 22 tsb $2233
     def instr_trb(self,addrmode,opcode,operand8,operand16):
-        print "Error - TRB not implemented yet [TBD]"
-        exit()
-   
+        operand,addr,length = self.get_operand(addrmode,opcode,operand8,operand16)
+        result = operand & (self.a ^ 0xff)
+        self.object_code[addr]=result
+        self.set_z((operand & self.a) == 0x00)
+        self.pc += length
+
+    def instr_tsb(self,addrmode,opcode,operand8,operand16):
+        operand,addr,length = self.get_operand(addrmode,opcode,operand8,operand16)
+        result = operand + self.a
+        self.object_code[addr]=result
+        self.set_z((operand & self.a) == 0x00)
+        self.pc += length
+ 
     # BA       tsx  
     def instr_tsx(self,addrmode,opcode,operand8,operand16):
         self.x = self.sp
