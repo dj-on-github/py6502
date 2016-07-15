@@ -262,7 +262,7 @@ end:   bpl vals
        db $aa,$bb,$cc,$dd
        nop
        org $fffc
-       db $00,$00
+       db $00,$00,$00,$00
 """
     lines = assembly_src.splitlines()
 
@@ -271,9 +271,16 @@ end:   bpl vals
     a.assemble(lines)
     object_code = a.object_code[:]
 
+    print
     # Output IntelHex
     print "IntelHex"
     a.print_intelhex()
+
+    # Output Srecords
+    print
+    print "SRECORDS"
+    a.print_srecords(01,01,"ModuleName","Comment")
+    print
 
     #instantiate the simulator
     s = sim6502.sim6502(object_code, symbols=a.symbols)

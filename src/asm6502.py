@@ -1274,6 +1274,107 @@ class asm6502():
                     printed_a_star = 1
                 i = i + 1
 
+    def srecord_checksum(self,astring):
+        checksum = 0
+        for c in astring:
+            checksum = checksum + ord(c)
+        checksum = checksum & 0x0ff
+        return "%02x" % checksum
+
+    def str2asciibytes(self,astring):
+        ascii = ""
+        for c in astring:
+            num = ord(c)
+            ascii += "%02x" % num
+        return ascii
+
+    def srecords(self,version,revision,module_name,comment):
+        #print "S19 FORMAT OUTPUT"
+        #print
+        i = 0
+        astring = ""
+        theoutput = list()
+        bytelist = list()
+        bytecount=0
+        address=0
+ 
+        # Make the Header Record
+        if len(module_name) > 20:
+            modname_trimmed = module_name[:20]
+        else:
+            modname_trimmed = module_name.ljust(20)
+
+        if (len(comment) > 36):
+            comment_trimmed = comment[:36]
+        else:
+            comment_trimmed = comment
+
+        text = "%02x%02x" % (version,revision)
+        text = text + self.str2asciibytes(module_name+comment)
+        addr = "0000"
+        countedpart = addr + text
+        length = "%02x" % (len(addr + text))
+        checksum = self.srecord_checksum(length+addr+text)
+        header = "S0" + length + addr + text + checksum
+        theoutput.append(header)
+
+        last_addr = 0
+        while (i < 65536):
+            if self.object_code[i] != -1:
+                address = i
+                values =list()
+                values.append(self.object_code[i])
+                localrun = 1
+                i = i + 1
+                if (i<65536):
+                    nextval = self.object_code[i]
+                    while (nextval != -1) and (localrun < 16):
+                        values.append(nextval)
+                        last_addr = i
+                        i = i + 1
+                        localrun = localrun + 1
+                        if (i<65536):
+                            nextval = self.object_code[i]
+                        else:
+                            nextval = -1
+
+                    # We reached 16 bytes, or hit the end or hit -1 So
+                    # Output the data record
+                    data = ""
+                    for value in values:
+                        data = ("%02X" % value) + data
+
+                    addr = "%02x%02x" % (((address >> 8) & 0xff), (address & 0xff))
+                    length = "%02x" % (len(addr+text))
+                    checksum = self.srecord_checksum(length+addr+data)
+                    record = "S1" + length + addr + data + checksum
+                    theoutput.append(record)
+                    
+            else:
+                i=i+1
+
+        # Output the count
+        record_count = len(theoutput)
+        data = "%02x%02x" % (((record_count >> 8) & 0xff), (record_count & 0xff))
+        length = "03"
+        checksum = self.srecord_checksum(length+data)
+        record = "S5" + length + data + checksum
+        theoutput.append(record)
+        
+        # Output the terminator
+        length = "03"
+        addr = "%02x%02x" % (((last_addr >> 8) & 0xff),(last_addr & 0xff))       
+        checksum = self.srecord_checksum(length+addr)
+        record = "S9" + length + addr + checksum
+        theoutput.append(record)
+
+        return (theoutput)
+        
+    def print_srecords(self,version,revision,module_name,comment):
+        lines = self.srecords(version,revision,module_name,comment)
+        for line in lines:
+            print line
+        
     def intelhex(self):
         #print "INTEL HEX FORMAT OUTPUT"
         #print
