@@ -1276,9 +1276,12 @@ class asm6502():
 
     def srecord_checksum(self,astring):
         checksum = 0
-        for c in astring:
-            checksum = checksum + ord(c)
+        for i in xrange(len(astring)/2):
+            hexpair = "0x"+astring[(i*2):(i*2)+2]
+            bytevalue = eval(hexpair)
+            checksum = checksum + bytevalue
         checksum = checksum & 0x0ff
+        checksum = checksum ^ 0xff
         return "%02x" % checksum
 
     def str2asciibytes(self,astring):
