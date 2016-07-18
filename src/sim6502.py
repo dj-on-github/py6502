@@ -965,7 +965,7 @@ class sim6502:
         
     # Instruction DEY
     # 88       dey 
-    def instr_dex(self,addrmode,opcode,operand8,operand16):
+    def instr_dey(self,addrmode,opcode,operand8,operand16):
         operand,addr,length = self.get_operand(addrmode,opcode,operand8,operand16)
         result = (self.y - 1) % 256
         self.make_flags_nz(result)
