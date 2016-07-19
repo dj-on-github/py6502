@@ -9,7 +9,7 @@ import math
 class dis6502:
     def __init__(self, object_code, symbols=None):
 
-       self.object_code = object_code[:]
+       self.object_code = object_code
        for i in xrange(len(self.object_code)):
             if self.object_code[i] < 0:
                 self.object_code[i] = 0x00

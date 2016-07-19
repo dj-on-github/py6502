@@ -701,7 +701,7 @@ class sim6502:
     def instr_bcc(self,addrmode,opcode,operand8,operand16):
         if (self.cc & 0x01)==0:
             if operand8 & 0x80 == 0x80:
-                offset = (operand8 & 0x7f)-128
+                offset = (operand8 & 0x7f)-129
             else:
                 offset = operand8
             addr = (self.pc + offset)
@@ -716,7 +716,7 @@ class sim6502:
     def instr_bcs(self,addrmode,opcode,operand8,operand16):
         if (self.cc & 0x01)==1:
             if operand8 & 0x80 == 0x80:
-                offset = (operand8 & 0x7f)-128
+                offset = (operand8 & 0x7f)-129
             else:
                 offset = operand8
             addr = (self.pc + offset)
@@ -731,7 +731,7 @@ class sim6502:
     def instr_beq(self,addrmode,opcode,operand8,operand16):
         if (self.cc & 0x02)==0x2:
             if operand8 & 0x80 == 0x80:
-                offset = (operand8 & 0x7f)-128
+                offset = (operand8 & 0x7f)-129
             else:
                 offset = operand8
             addr = (self.pc + offset)
@@ -770,7 +770,7 @@ class sim6502:
     def instr_bmi(self,addrmode,opcode,operand8,operand16):
         if (self.cc & 0x80)==0x80:
             if operand8 & 0x80 == 0x80:
-                offset = (operand8 & 0x7f)-128
+                offset = (operand8 & 0x7f)-129
             else:
                 offset = operand8
             addr = (self.pc + offset)
@@ -785,7 +785,7 @@ class sim6502:
     def instr_bne(self,addrmode,opcode,operand8,operand16):
         if (self.cc & 0x02)==0x00:
             if operand8 & 0x80 == 0x80:
-                offset = (operand8 & 0x7f)-128
+                offset = (operand8 & 0x7f)-129
             else:
                 offset = operand8
             addr = (self.pc + offset)
@@ -800,7 +800,7 @@ class sim6502:
     def instr_bpl(self,addrmode,opcode,operand8,operand16):
         if (self.cc & 0x80)==0x00:
             if operand8 & 0x80 == 0x80:
-                offset = (operand8 & 0x7f)-128
+                offset = (operand8 & 0x7f)-129
             else:
                 offset = operand8
             addr = (self.pc + offset)
@@ -813,7 +813,7 @@ class sim6502:
     # 80 55    bra $55  
     def instr_bra(self,addrmode,opcode,operand8,operand16):
         if operand8 & 0x80 == 0x80:
-            offset = (operand8 & 0x7f)-128
+            offset = (operand8 & 0x7f)-129
         else:
             offset = operand8
         addr = (self.pc + offset)
@@ -837,7 +837,7 @@ class sim6502:
     def instr_bvc(self,addrmode,opcode,operand8,operand16):
         if (self.cc & 0x40)==0x00:
             if operand8 & 0x80 == 0x80:
-                offset = (operand8 & 0x7f)-128
+                offset = (operand8 & 0x7f)-129
             else:
                 offset = operand8
             addr = (self.pc + offset)
@@ -851,7 +851,7 @@ class sim6502:
     def instr_bvs(self,addrmode,opcode,operand8,operand16):
         if (self.cc & 0x40)==0x040:
             if operand8 & 0x80 == 0x80:
-                offset = (operand8 & 0x7f)-128
+                offset = (operand8 & 0x7f)-129
             else:
                 offset = operand8
             addr = (self.pc + offset)

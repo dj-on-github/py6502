@@ -2,7 +2,7 @@
 # http://www.textfiles.com/100/krckwczt.app
 
 # This shows how to simply feed in straight text
-# by passing it through splitlines()
+# by passing it through splitlines() or reading from a file with readlines()
 
 from asm6502 import asm6502
 

@@ -26,7 +26,12 @@ from termbox_util import termbox_editableline
 # the viewport.
 from termbox_util import viewplane
 
-leftwidth = 50
+leftwidth = 40
+memory_selected = True
+
+current_pc_disassembly_line = 0
+disassembly_count = 0
+linelist=list()
 
 def el_validator(e):  
     (type, ch, key, mod, w, h, x, y ) = e
@@ -34,8 +39,6 @@ def el_validator(e):
         return(7)
     else:
         return(ch)
-
-
 
 def draw_commands_view(vptu):
     vptu.clear()
@@ -82,10 +85,14 @@ def update_memory_inner_view(vptu,startaddr,object_code):
         for i in xrange(8):
             value = object_code[addr+i]
             if value >= 0:
-                if a.instruction_map[addr+i] == None:
+                if (a.instruction_map[addr+i] == None):
                     vptu.addstr(x=5+(i*3),y=line,thestring="%02x"%object_code[addr+i],bold=False)
-                else:
+                    #vptu.addstr(x=5+(i*3),y=line,thestring="nn",bold=False)
+                elif (a.instruction_map[addr+i] >= 0) and (a.instruction_map[addr+i] < 256):
                     vptu.addstr(x=5+(i*3),y=line,thestring="%02x"%object_code[addr+i],bold=True)
+                else:
+                    vptu.addstr(x=5+(i*3),y=line,thestring="%02x"%object_code[addr+i],bold=False)
+                    #vptu.addstr(x=5+(i*3),y=line,thestring="xx",bold=False)
             if (value > 31) and (value < 128):
                 vptu.addstr(x=29+i,y=line,thestring=chr(object_code[addr+i]),bold=False)
  
@@ -98,10 +105,14 @@ def draw_memory_inner_view(vptu,object_code):
         for i in xrange(8):
             value = object_code[addr+i]
             if value >= 0:
-                if a.instruction_map[addr+i] == None:
+                if (a.instruction_map[addr+i] == None):
                     vptu.addstr(x=5+(i*3),y=line,thestring="%02x"%object_code[addr+i],bold=False)
-                else:
+                    #vptu.addstr(x=5+(i*3),y=line,thestring="nn",bold=False)
+                elif (a.instruction_map[addr+i] >= 0) and (a.instruction_map[addr+i] < 256):
                     vptu.addstr(x=5+(i*3),y=line,thestring="%02x"%object_code[addr+i],bold=True)
+                else:
+                    vptu.addstr(x=5+(i*3),y=line,thestring="%02x"%object_code[addr+i],bold=False)
+                    #vptu.addstr(x=5+(i*3),y=line,thestring="xx",bold=False)
             if (value > 31) and (value < 128):
                 vptu.addstr(x=29+i,y=line,thestring=chr(object_code[addr+i]),bold=False)
 
@@ -113,24 +124,109 @@ def draw_memory_inner_view_partial(vptu,startline,endline,object_code):
         for i in xrange(8):
             value = object_code[addr+i]
             if value >= 0:
-                if a.instruction_map[addr+i] == None:
+                if (a.instruction_map[addr+i] == None):
                     vptu.addstr(x=5+(i*3),y=line,thestring="%02x"%object_code[addr+i],bold=False)
-                else:
+                    #vptu.addstr(x=5+(i*3),y=line,thestring="nn",bold=False)
+                elif (a.instruction_map[addr+i] >= 0) and (a.instruction_map[addr+i] < 256):
                     vptu.addstr(x=5+(i*3),y=line,thestring="%02x"%object_code[addr+i],bold=True)
+                else:
+                    vptu.addstr(x=5+(i*3),y=line,thestring="%02x"%object_code[addr+i],bold=False)
+                    #vptu.addstr(x=5+(i*3),y=line,thestring="xx",bold=False)
             if (value > 31) and (value < 128):
                 vptu.addstr(x=29+i,y=line,thestring=chr(object_code[addr+i]),bold=False)
         
-def draw_memory_outer_view(vptu):
+def draw_memory_outer_view(vptu,memory_selected):
     vptu.clear()
     vptu.border()
-    vptu.addstr(x=4,y=0,thestring="MEMORY",bold=False)
-            
-def dbg6502(object_code, symbol_table):
+    vptu.addstr(x=4,y=0,thestring="MEMORY",bold=memory_selected)
 
-    s = sim6502(object_code,symbols=symbol_table)
-    d = dis6502(s.object_code,symbols=symbol_table)
-    object_code = s.object_code
+def draw_disassembly_inner_view(vptu,object_code):
+    vptu.clear()
+    vptu.addstr(1,1,"wut?")
+    # Start with PC. Disassemble a line and put it in a list of lines.
+    # Then work backwards until we reach -49 lines or 0
+    # Then work forwards until we reach +50 lines or ffff
+    # Then we have a list of lines to display.
+    # Show them in the window and highlight the instruction at pc.
+    linelist = list()
+    line = dis.disassemble_line(s.pc) # The first line at pc
+    linelist.append(line)
     
+    # Now work backwards from pc
+    reversecount = 0
+    address = s.pc
+    while (reversecount < 49) and (address > 0): 
+        if a.instruction_map[address-1] == -1:
+            address = address -2
+            thetype = "instruction"
+        elif a.instruction_map[address-1]==-2:
+            address = address -3
+            thetype = "instruction"
+        elif (a.instruction_map[address-1] >= 0) and (a.instruction_map[address-1] < 256):
+            address = address -1
+            thetype = "instruction"
+        else:
+            address = address -1
+            thetype = "data"
+            
+        if thetype == "data":
+            line = "           %04x %02x       DW  $%02x" % (address,object_code[address],object_code[address])
+        else:
+            line = dis.disassemble_line(address)
+        linelist.insert(0,line)
+        reversecount += 1
+    vptu.addstr(2,2,"reversecount="+str(reversecount).ljust(17))    
+    # Now work forwards
+    forwardcount = 0
+    address = s.pc
+    while (forwardcount < 50) and (address < 0xffff): 
+        if (a.instruction_map[address+1])==None:
+            address = address+1
+            thetype = "data"
+        elif (a.instruction_map[address+1] >= 0) and (a.instruction_map[address+1] < 256):
+            address = address +1
+            thetype = "instruction"
+        elif (a.instruction_map[address+1]==-1) and (a.instruction_map[address+2] >= 0) and (a.instruction_map[address+2] < 256):
+            address = address +2
+            thetype = "instruction"
+        elif (a.instruction_map[address+1]==-1) and (a.instruction_map[address+3] >= 0) and (a.instruction_map[address+3] < 256):
+            address = address +3
+            thetype = "instruction"
+        else:
+            address = address +1
+            thetype = "data"
+            
+        if thetype == "data":
+            line = "           %04x %02x       DW  $%02x" % (address,object_code[address],object_code[address])
+        else:
+            line = dis.disassemble_line(address)
+        linelist.append(line)
+        forwardcount += 1
+        
+        # Now put the lines into the inner view with pc somewhere near the middle
+     
+    # Add the reverse list       
+    for i in xrange(reversecount):
+        vptu.addstr(x=0,y=i,thestring=linelist[i],bold=False)
+        
+    # Add the current instruction highlighted
+    vptu.addstr(x=0,y=reversecount,thestring=linelist[reversecount],bold=True)
+    
+    # Add the forward list       
+    for i in xrange(forwardcount):
+        vptu.addstr(x=0,y=i+reversecount+1,thestring=linelist[i+1+reversecount],bold=False)
+    
+    current_pc_disassembly_line = reversecount
+    disassembly_count = len(linelist)
+    return (current_pc_disassembly_line,disassembly_count)
+def draw_disassembly_outer_view(vptu,memory_selected):
+    vptu.clear()
+    vptu.border()
+    vptu.addstr(x=4,y=0,thestring="DISASSEMBLY",bold=not(memory_selected))
+
+def dbg6502(object_code, symbol_table):
+    object_code = s.object_code
+    memory_selected = True
     # Use a real termbox window tbinst.   
     with termbox.Termbox() as tb:
         # The things we seen in the main view are composed
@@ -141,7 +237,7 @@ def dbg6502(object_code, symbol_table):
         
         # Compute some positions
         maxx,maxy=tbtu.getmaxxy()
-        memorywindowheight=maxy -4 -4 -4  
+        memorywindowheight=maxy -12
         rightwidth = maxx-leftwidth
               
         # A viewplane to hold the command information      
@@ -172,7 +268,7 @@ def dbg6502(object_code, symbol_table):
         # The outer to hold the border and the innner
         vp_memory_outer=viewplane(width=leftwidth,height=memorywindowheight)
         vptu_memory_outer = termbox_util(vp_memory_outer)
-        draw_memory_outer_view(vptu_memory_outer)
+        draw_memory_outer_view(vptu_memory_outer,memory_selected)
         
         # Add the views as persistent views in the terminal view
         pvid_commands = tbtu.add_persistent_viewplane(vp_commands,0,0)
@@ -187,6 +283,24 @@ def dbg6502(object_code, symbol_table):
         # Put the inner memory view in the outer memory view
         pvid_memory_inner = vptu_memory_outer.add_persistent_viewplane_window(vp_memory_inner,leftwidth-2,memorywindowheight-2,0,0,1,1,True)
         
+        # The disassembly view
+        vp_disassembly_inner=viewplane(width=maxx+1-leftwidth-2,height=100)
+        vptu_disassembly_inner = termbox_util(vp_disassembly_inner)
+        s.pc = 0
+        draw_disassembly_inner_view(vptu_disassembly_inner, object_code)
+        
+        # The outer to hold the border and the innner
+        vp_disassembly_outer=viewplane(width=maxx+1-leftwidth,height=maxy-12)
+        vptu_disassembly_outer = termbox_util(vp_disassembly_outer)
+        draw_disassembly_outer_view(vptu_disassembly_outer,memory_selected)
+        
+        # The disassembly view is a window into the viewplane since the
+        # viewplane has a lot of listing laid out in.
+        # Parameters are : vp,width,height,srcx,srcy,viewx,viewy,active
+        pvid_disassembly_outer = tbtu.add_persistent_viewplane(vp_disassembly_outer,leftwidth,12)
+        
+        # Put the inner memory view in the outer memory view
+        pvid_disassembly_inner = vptu_disassembly_outer.add_persistent_viewplane_window(vp_disassembly_inner,(maxx-leftwidth-2),maxy-14,0,0,1,1,True)
         
         # The main loop
         # Listen for keypresses and do what is asked
@@ -196,7 +310,20 @@ def dbg6502(object_code, symbol_table):
         
         while True:            
             #Refresh the screen
+            (cpdl,dc) = draw_disassembly_inner_view(vptu_disassembly_inner,object_code)
+            #draw_memory_inner_view(vptu_memory_inner, object_code)
             vptu_memory_outer.present()
+            new_srcx=0
+            if cpdl > 0:
+                new_srcy = cpdl -10
+                if new_srcy < 0:
+                    new_srcy = 0
+            else:
+                new_srcy = 0
+            vptu_disassembly_outer.move_persistent_viewplane_window(pvid_memory_inner,new_srcx,new_srcy) 
+            #vptu_disassembly_outer.addstr(20,0,"cpdl="+str(cpdl)+" len="+str(dc)+" ")
+            vptu_disassembly_outer.present() 
+            draw_registers_view(vptu_registers,s.pc,s.a,s.x,s.y,s.sp,s.cc)                   
             tbtu.present()
             
             # Get a keypress
@@ -208,32 +335,42 @@ def dbg6502(object_code, symbol_table):
             #if type==termbox.EVENT_KEY and ch=='e':
             #    content=el.edit(el_validator,max_width=10)
  
+            tbtu.addstr(leftwidth+3,5,str(event))
             # Exit when escape pressed.
             if type==termbox.EVENT_KEY and key == termbox.KEY_ESC:
                 break
+            
+            if type==type==termbox.EVENT_KEY and key == termbox_util.key_tab:
+                memory_selected = not(memory_selected)
+                draw_memory_outer_view(vptu_memory_outer,memory_selected)
+                draw_disassembly_outer_view(vptu_disassembly_outer,memory_selected)
                 
             # When r is pressed, sent a reset to the simulator
             elif type==termbox.EVENT_KEY and ch=='R':
                 s.reset()
                 vptu_action.addstr(1,1,"RESET          ")
+                draw_memory_inner_view(vptu_memory_inner, object_code)
+                
             
             # When r is pressed, sent a reset to the simulator
             elif type==termbox.EVENT_KEY and ch=='I':
                 s.irq()
                 vptu_action.addstr(1,1,"IRQ            ")
+                draw_memory_inner_view(vptu_memory_inner, object_code)
             
             # When r is pressed, sent a reset to the simulator
             elif type==termbox.EVENT_KEY and ch=='N':
                 s.reset()
                 vptu_action.addstr(1,1,"NMI            ")
+                draw_memory_inner_view(vptu_memory_inner, object_code)
                     
-            
             # When s is pressed, execute one instruction
             elif type==termbox.EVENT_KEY and ch=='s':
-                distxt = d.disassemble_line(s.pc)
+                distxt = dis.disassemble_line(s.pc)
                 (action, addr) = s.execute()
                 vptu_action.addstr(1,1,distxt.ljust(leftwidth-2))
                 draw_registers_view(vptu_registers,s.pc,s.a,s.x,s.y,s.sp,s.cc)
+                draw_disassembly_inner_view(vptu_disassembly_inner,object_code)
                 
                 # simulator indicated it tried to run uninitialized memory
                 if action=="weeds":
@@ -260,8 +397,8 @@ def dbg6502(object_code, symbol_table):
                     vptu_action.addstr(1,2,"      ".ljust(leftwidth-2))   
                      
             # Move memory window with the mouse wheel
-            #elif type==termbox.EVENT_KEY and key==termbox_util.TB_KEY_MOUSE_WHEEL_UP:
-            elif type==termbox.EVENT_KEY and ch=='i':
+            elif type==termbox.EVENT_KEY and key==termbox_util.TB_KEY_ARROW_UP:
+            #elif type==termbox.EVENT_KEY and ch=='i':
                 memaddr -= 8
                 if memaddr < 0:
                     memaddr = 0
@@ -271,7 +408,7 @@ def dbg6502(object_code, symbol_table):
                 vptu_memory_outer.move_persistent_viewplane_window(pvid_memory_inner,new_srcx,new_srcy)
                 
             # Move memory window with the mouse wheel
-            #elif type==termbox.EVENT_KEY and key==termbox_util.TB_KEY_MOUSE_WHEEL_UP:
+            #elif type==termbox.EVENT_KEY and key==termbox_util.TB_KEY_ARROW_UP:
             elif type==termbox.EVENT_KEY and ch=='o':
                 memaddr -= 8*32
                 if memaddr < 0:
@@ -281,8 +418,8 @@ def dbg6502(object_code, symbol_table):
                 new_srcx = 0         
                 vptu_memory_outer.move_persistent_viewplane_window(pvid_memory_inner,new_srcx,new_srcy)
 
-            #elif type==termbox.EVENT_KEY and key==termbox_util.TB_KEY_MOUSE_WHEEL_DOWN:
-            elif type==termbox.EVENT_KEY and ch=='k':
+            elif type==termbox.EVENT_KEY and key==termbox_util.TB_KEY_ARROW_DOWN:
+            #elif type==termbox.EVENT_KEY and ch=='k':
                 memaddr += 8
                 line = memaddr/8
                 if (line+memorywindowheight-2) < 8192:
@@ -349,7 +486,14 @@ a.assemble(lines)
 object_code = copy.deepcopy(a.object_code)
 symbol_table = copy.deepcopy(a.symbols)
 
+# Simulator instance
+s = sim6502(object_code,symbols=symbol_table)
+
+# Disassembler Instance
+dis = dis6502(s.object_code,symbols=symbol_table)
+
 # start the debugger
 d = dbg6502(object_code,symbol_table)
 
+print "Exited 6502 Debugger"
 
