@@ -365,8 +365,9 @@ class dis6502:
             if operand8 < 128:
                 operandtext = "+$%02x" % operand8
             else:
-                offset = (operand7 & 0xff) -128
-                offset = math.abs(offset)
+                offset = (operand8 & 0x7f) -128
+                
+                offset = -offset
                 operandtext = "-$%02x" %offset
             length = 2
         elif addrmode == "accumulator":

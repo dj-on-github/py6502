@@ -78,14 +78,14 @@ def update_memory_inner_view(vptu,startaddr,object_code):
     endline = start + maxy
     for line in xrange(startline,endline+1):
         addr = line*8
-        astr = "%04x" % addr
+        vptu.addstr(x=0,y=line,thestring="%04x"%addr,bold=False)
         for i in xrange(8):
             value = object_code[addr+i]
             if value >= 0:
-                astr = astr + (" %02x" % object_code[addr+i]) 
-            else:
-                astr = astr + "   "
-        vptu.addstr(x=0,y=line,thestring=astr,bold=False)
+                if a.instruction_map[addr+i] == None:
+                    vptu.addstr(x=5+(i*3),y=line,thestring="%02x"%object_code[addr+i],bold=False)
+                else:
+                    vptu.addstr(x=5+(i*3),y=line,thestring="%02x"%object_code[addr+i],bold=True)
         
 def draw_memory_inner_view(vptu,object_code):
     vptu.clear()
@@ -95,10 +95,16 @@ def draw_memory_inner_view(vptu,object_code):
         for i in xrange(8):
             value = object_code[addr+i]
             if value >= 0:
-                astr = astr + (" %02x" % object_code[addr+i]) 
-            else:
-                astr = astr + "   "
-        vptu.addstr(x=0,y=line,thestring=astr,bold=False)
+                if a.instruction_map[addr+i] == None:
+                    vptu.addstr(x=5+(i*3),y=line,thestring="%02x"%object_code[addr+i],bold=False)
+                else:
+                    vptu.addstr(x=5+(i*3),y=line,thestring="%02x"%object_code[addr+i],bold=True)
+            #value = object_code[addr+i]
+            #if value >= 0:
+            #    astr = astr + (" %02x" % object_code[addr+i]) 
+            #else:
+            #    astr = astr + "   "
+        #vptu.addstr(x=0,y=line,thestring=astr,bold=False)
 
 def draw_memory_inner_view_partial(vptu,startline,endline,object_code):
     for line in xrange(startline,endline+1):

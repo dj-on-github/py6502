@@ -16,7 +16,7 @@
     #absolute indexed indirect ($5000,X) - only JMP ~ "absoluteindexedindirect"
     #zeropage indirect       ($20)                  ~ "zeropageindirect"
     #absolute indirect       ($5000) - only JMP     ~ "absoluteindirect"        
-class asm6502parent():
+class py6502_common():
     def __init__(self):
 
         # Build the opcode type tables

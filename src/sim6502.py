@@ -431,7 +431,7 @@ class sim6502:
         elif addrmode == "implicit":
             addr = None
             operand = operand8
-            length = 2
+            length = 1
         else:
             print "ERROR: Address mode %s not found" % addrmode
             print "     : PC = 0x%04x" % self.pc
@@ -481,9 +481,15 @@ class sim6502:
                 methodname="instr_"+instruction
                 #print "METHODNAME:"+methodname
                 method = getattr(self, methodname, lambda: "nothing")         
-                method(addrmode,opcode,operand8,operand16)
+                thing=method(addrmode,opcode,operand8,operand16)
+                if thing==None:
+                    return (None,None)
+                return thing
+            else:
+                return("not_instruction",self.pc)
         else:
-            print "ERROR: Out in the weeds. Opcode = %d" % opcode
+            return("weeds",self.pc)
+            #print "ERROR: Out in the weeds. Opcode = %d" % opcode
     
     def none_or_byte(self,thebyte):
         if thebyte == None:
@@ -632,6 +638,7 @@ class sim6502:
         #self.make_flags_v(self.a, operand, carryin, result, carryout)
         self.set_v(((acc^result) & (operand^result) & 0x80) == 0x80)
         self.pc += length
+        return None
  
     # Instruction AND
     # 29 55    and #$55      
@@ -657,6 +664,8 @@ class sim6502:
         self.a = result
         self.make_flags_nz(result)
         self.pc += length
+        
+        return None
 
     # Instruction ASL
     # 0A       asl A         
@@ -673,6 +682,7 @@ class sim6502:
                 self.cc = self.cc | 0xfe
             self.a = result
             self.pc += 1
+            return None
         else:
             # Get the operand based on the address mode
             operand,addr,length = self.get_operand(addrmode,opcode,operand8,operand16)
@@ -684,33 +694,52 @@ class sim6502:
 
             self.object_code[addr] = result
             self.pc += length
-
+            return ("w",addr)
+            
     # Instruction BCC
     # 90 55    bcc $55        
     def instr_bcc(self,addrmode,opcode,operand8,operand16):
         if (self.cc & 0x01)==0:
-            addr = (self.pc + operand8) % 256
+            if operand8 & 0x80 == 0x80:
+                offset = (operand8 & 0x7f)-128
+            else:
+                offset = operand8
+            addr = (self.pc + offset)
             self.pc = addr
         else:
             self.pc += 2
+        
+        return None
 
     # Instruction BCS
     # B0 55    bcs $55       
     def instr_bcs(self,addrmode,opcode,operand8,operand16):
         if (self.cc & 0x01)==1:
-            addr = (self.pc + operand8) % 256
+            if operand8 & 0x80 == 0x80:
+                offset = (operand8 & 0x7f)-128
+            else:
+                offset = operand8
+            addr = (self.pc + offset)
             self.pc = addr
         else:
             self.pc += 2
+        
+        return None
 
     # Instruction BEQ
     # F0 55    beq $55     
     def instr_beq(self,addrmode,opcode,operand8,operand16):
         if (self.cc & 0x02)==0x2:
-            addr = (self.pc + operand8) % 256
+            if operand8 & 0x80 == 0x80:
+                offset = (operand8 & 0x7f)-128
+            else:
+                offset = operand8
+            addr = (self.pc + offset)
             self.pc = addr
         else:
             self.pc += 2
+        
+        return None
 
     # Instruction BIT
     # 89 55    bit #$55      
@@ -733,39 +762,63 @@ class sim6502:
         # V is set to bit 6 of the operand
         self.set_v(operand & 0x40 == 0x40)
         self.pc += length
+        
+        return None
 
     # Instruction BMI
     # 30 55    bmi $55
     def instr_bmi(self,addrmode,opcode,operand8,operand16):
         if (self.cc & 0x80)==0x80:
-            addr = (self.pc + operand8) % 256
+            if operand8 & 0x80 == 0x80:
+                offset = (operand8 & 0x7f)-128
+            else:
+                offset = operand8
+            addr = (self.pc + offset)
             self.pc = addr
         else:
             self.pc += 2
+        
+        return None
 
     # Instruction BNE
     # D0 55    bne $55
     def instr_bne(self,addrmode,opcode,operand8,operand16):
         if (self.cc & 0x02)==0x00:
-            addr = (self.pc + operand8) % 256
+            if operand8 & 0x80 == 0x80:
+                offset = (operand8 & 0x7f)-128
+            else:
+                offset = operand8
+            addr = (self.pc + offset)
             self.pc = addr
         else:
             self.pc += 2
+        
+        return None
 
     # Instruction BPL
     # 10 55    bpl $55  
     def instr_bpl(self,addrmode,opcode,operand8,operand16):
         if (self.cc & 0x80)==0x00:
-            addr = (self.pc + operand8) % 256
+            if operand8 & 0x80 == 0x80:
+                offset = (operand8 & 0x7f)-128
+            else:
+                offset = operand8
+            addr = (self.pc + offset)
             self.pc = addr
         else:
             self.pc += 2
+        return None
 
     # Instruction BRA
     # 80 55    bra $55  
     def instr_bra(self,addrmode,opcode,operand8,operand16):
-        addr = (self.pc + operand8) % 256
+        if operand8 & 0x80 == 0x80:
+            offset = (operand8 & 0x7f)-128
+        else:
+            offset = operand8
+        addr = (self.pc + offset)
         self.pc = addr
+        return None
     
     # Instruction BRK
     # 00       brk  
@@ -776,49 +829,64 @@ class sim6502:
         high = self.object_code[0xffff]
         self.pc = low+(high << 8)
         self.set_b(True)
+        return None
 
 
     # Instruction BVC
     # 50 55    bvc $55       
     def instr_bvc(self,addrmode,opcode,operand8,operand16):
         if (self.cc & 0x40)==0x00:
-            addr = (self.pc + operand8) % 256
+            if operand8 & 0x80 == 0x80:
+                offset = (operand8 & 0x7f)-128
+            else:
+                offset = operand8
+            addr = (self.pc + offset)
             self.pc = addr
         else:
             self.pc += 2
+        return None
 
     # Instruction BVS
     # 70 55    bvs $55 
     def instr_bvs(self,addrmode,opcode,operand8,operand16):
         if (self.cc & 0x40)==0x040:
-            addr = (self.pc + operand8) % 256
+            if operand8 & 0x80 == 0x80:
+                offset = (operand8 & 0x7f)-128
+            else:
+                offset = operand8
+            addr = (self.pc + offset)
             self.pc = addr
         else:
             self.pc += 2
+        return None
 
     # Instruction CLC
     # 18        clc 
     def instr_clc(self,addrmode,opcode,operand8,operand16):
         self.set_c(False)
         self.pc += 1
+        return None
 
     # Instruction CLD
     # D8        cld 
     def instr_cld(self,addrmode,opcode,operand8,operand16):
         self.set_d(False)
         self.pc += 1
+        return None
 
     # Instruction CLI
     # 58        cli 
     def instr_cli(self,addrmode,opcode,operand8,operand16):
         self.set_i(False)
         self.pc += 1
+        return None
 
     # Instruction CLV
     # 57        clv 
     def instr_clv(self,addrmode,opcode,operand8,operand16):
         self.set_v(False)
         self.pc += 1
+        return None
 
     # Instruction CMP
     # C9 55    cmp #$55      
@@ -834,6 +902,7 @@ class sim6502:
         test = (self.a - operand) % 256
         self.make_flags_nz(test)
         self.pc += length
+        return None
 
 
     # Instruction CMP
@@ -848,6 +917,7 @@ class sim6502:
         test = (self.a - operand) % 256
         self.make_flags_nz(test)
         self.pc += length
+        return None
  
     # Instruction CPY
     # C0 55    cpy #$55      
@@ -858,6 +928,7 @@ class sim6502:
         test = (self.y - operand) % 256
         self.make_flags_nz(test)
         self.pc += length
+        return None
 
     # Instruction DEA aka DEC A
     # 3A       dea 
@@ -866,6 +937,7 @@ class sim6502:
         test = (self.a - 1) % 256
         self.make_flags_nz(test)
         self.pc += length
+        return None
 
     # Instruction DEC
     # C6 20    dec $20       
@@ -876,7 +948,9 @@ class sim6502:
         operand,addr,length = self.get_operand(addrmode,opcode,operand8,operand16)
         result = (operand - 1) % 256
         self.make_flags_nz(result)
+        self.object_code[addr]=result
         self.pc += length
+        return ("w",addr)
 
 
     # Instruction DEX
@@ -887,7 +961,8 @@ class sim6502:
         self.make_flags_nz(result)
         self.x = result
         self.pc += length
-              
+        return None
+        
     # Instruction DEY
     # 88       dey 
     def instr_dex(self,addrmode,opcode,operand8,operand16):
@@ -896,6 +971,7 @@ class sim6502:
         self.make_flags_nz(result)
         self.y = result
         self.pc += length
+        return None
 
     # Instruction EOR
     # 49 55    eor #$55      
@@ -920,6 +996,7 @@ class sim6502:
         self.a = result
         self.make_flags_nz(result)
         self.pc += length
+        return None
 
     # Instruction INA aka INC A
     # 1A       ina
@@ -928,6 +1005,7 @@ class sim6502:
         test = (self.a + 1) % 256
         self.make_flags_nz(test)
         self.pc += length
+        return None
 
     # Instruction INC
     # E6 20    inc $20       
@@ -939,6 +1017,8 @@ class sim6502:
         result = (operand + 1) % 256
         self.make_flags_nz(result)
         self.pc += length
+        self.object_code[addr] = result
+        return None
  
     # Instruction INX
     # E8       inx
@@ -957,6 +1037,7 @@ class sim6502:
         self.make_flags_nz(result)
         self.y = result
         self.pc += length
+        return None
 
     # Instruction JMP
     # 4C 33 22 jmp $2233     
@@ -967,14 +1048,16 @@ class sim6502:
         operand,addr,length = self.get_operand16(addrmode,opcode,operand8,operand16)
         #print "INSTR_JMP operand   = %04x addr=%04x length=%d" % (operand,addr, length)
         #print "INSTR_JMP operand16 = %04x " % operand16
-        self.pc = addr    
+        self.pc = addr   
+        return None 
     
     # Instruction JSR
     # 20 33 22 jsr $2233     
     def instr_jsr(self,addrmode,opcode,operand8,operand16):
         operand,addr,length = self.get_operand16(addrmode,opcode,operand8,operand16)
         self.pushaddr(self.pc + 3)
-        self.pc = operand      
+        self.pc = operand  
+        return ("stack",self.sp)    
 
     # Instruction LDA
     # A9 55    lda #$55      
@@ -991,6 +1074,7 @@ class sim6502:
         #print "LDA : addrmode:"+str(addrmode)+" operand:"+str(operand)+" operand8 "+str(operand8)
         self.a = operand
         self.pc += length
+        return None
 
     # Instruction LDX
     # A9 55    lda #$55      
@@ -1003,6 +1087,7 @@ class sim6502:
         operand,addr,length = self.get_operand(addrmode,opcode,operand8,operand16)
         self.x = operand
         self.pc += length
+        return None
 
     # Instruction LDY
     # A0 55    ldy #$55      
@@ -1014,6 +1099,7 @@ class sim6502:
         operand,addr,length = self.get_operand(addrmode,opcode,operand8,operand16)
         self.y = operand
         self.pc += length
+        return None
 
     # Instruction LSR
     # 4A       lsr A         
@@ -1024,18 +1110,23 @@ class sim6502:
     def instr_lsr(self,addrmode,opcode,operand8,operand16):
         if (addrmode=="accumulator"):
             result = self.a >> 1
+            self.a = result
             self.pc += 1
+            self.make_flags_nz(result)
+            return None
         else:
             operand,addr,length = self.get_operand(addrmode,opcode,operand8,operand16)
             result = (operand >> 1) % 256
             self.pc += length
-        self.a = result
-        self.make_flags_nz(result)
+            self.make_flags_nz(result)
+            self.object_code[addr]=result
+            return("w",addr)
 
-    # Instruction LSR
+    # Instruction NOP
     # EA       nop
     def instr_nop(self,addrmode,opcode,operand8,operand16):
         self.pc += 1
+        return None
 
     # Instruction ORA
     # 09 55    ora #$55      
@@ -1053,6 +1144,7 @@ class sim6502:
         self.a = result
         self.make_flags_nz(result)
         self.pc += length
+        return None
 
     # Instruction PHA and other Pxx stack instructions
     # 08       php
@@ -1067,34 +1159,42 @@ class sim6502:
         self.object_code[0x100+self.sp] = self.cc
         self.sp = (self.sp - 1 ) % 256
         self.pc += 1
+        return ("stack",self.sp)
     def instr_pha(self,addrmode,opcode,operand8,operand16):
         self.object_code[0x100+self.sp] = self.a
         self.sp = (self.sp - 1 ) % 256
         self.pc += 1
+        return ("stack",self.sp)
     def instr_phx(self,addrmode,opcode,operand8,operand16):
         self.object_code[0x100+self.sp] = self.x
         self.sp = (self.sp - 1 ) % 256
         self.pc += 1
+        return ("stack",self.sp)
     def instr_phy(self,addrmode,opcode,operand8,operand16):
         self.object_code[0x100+self.sp] = self.y
         self.sp = (self.sp - 1 ) % 256
         self.pc += 1
+        return ("stack",self.sp)
     def instr_plp(self,addrmode,opcode,operand8,operand16):
         self.sp = (self.sp + 1 ) % 256
         self.cc = self.object_code[0x100+self.sp]
         self.pc += 1
+        return ("stack",self.sp)
     def instr_pla(self,addrmode,opcode,operand8,operand16):
         self.sp = (self.sp + 1 ) % 256
         self.a = self.object_code[0x100+self.sp]
         self.pc += 1
+        return ("stack",self.sp)
     def instr_plx(self,addrmode,opcode,operand8,operand16):
         self.sp = (self.sp + 1 ) % 256
         self.x = self.object_code[0x100+self.sp]
         self.pc += 1
+        return ("stack",self.sp)
     def instr_ply(self,addrmode,opcode,operand8,operand16):
         self.sp = (self.sp + 1 ) % 256
         self.y = self.object_code[0x100+self.sp]
         self.pc += 1
+        return ("stack",self.sp)
 
     # Instruction ROL
     # 2A       rol A         
@@ -1116,6 +1216,8 @@ class sim6502:
             self.a = result
             self.set_c(carryin)
             self.pc += 1
+            self.make_flags_nz(result)  
+            return None
         else:
             operand,addr,length = self.get_operand(addrmode,opcode,operand8,operand16)
             if ((operand & 0x80) == 0x80):
@@ -1131,9 +1233,10 @@ class sim6502:
             result = ((operand << 1) % 256) | carryin
             self.set_c(carryout)
             self.object_code[addr] = result
-            self.pc += length
-        self.make_flags_nz(result)   
-
+            self.pc += length 
+            self.make_flags_nz(result)   
+            return ("w",addr)
+            
     # Instruction ROR
     # 6A       ror A         
     # 66 20    ror $20       
@@ -1155,6 +1258,7 @@ class sim6502:
             self.a = result
             self.set_c(carryout)
             self.pc += 1
+            return None
         else:
             operand,addr,length = self.get_operand(addrmode,opcode,operand8,operand16)
             if ((self.cc & 0x01) == 0x01):
@@ -1169,8 +1273,9 @@ class sim6502:
             result = ((operand >> 1) % 256) | carry
             self.object_code[addr]=result
             self.set_c(carryout)
-            self.pc += length
-        self.make_flags_nz(result)   
+            self.pc += length 
+            self.make_flags_nz(result)   
+            return ("w",addr)   
 
     # Instruction RTI
     # 40       rti  
@@ -1178,11 +1283,13 @@ class sim6502:
         self.cc = self.pull()
         self.pc = self.pulladdr()
         self.set_i(False)
+        return ("stack",self.sp)
         
     # Instruction RTS
     # 60       rts
     def instr_rti(self,addrmode,opcode,operand8,operand16):
-        self.pc = self.pulladdr()        
+        self.pc = self.pulladdr()    
+        return ("stack",self.sp)    
 
     # Instruction SBC
     # E9 55    sbc #$55      
@@ -1221,24 +1328,28 @@ class sim6502:
         self.make_flags_nz(result)
         self.make_flags_v(self.a, operand, carryin, result, carryout)
         self.pc += length
+        return None
     
     # Instruction SEC    
     # 38       sec
     def instr_sec(self,addrmode,opcode,operand8,operand16):
         self.set_c(True)
         self.pc += 1
+        return None
     
     # Instruction SED    
     # F8       sed
     def instr_sed(self,addrmode,opcode,operand8,operand16):
         self.set_d(True)
         self.pc += 1    
+        return None
     
     # Instruction SEI
     # 78       sei
     def instr_sei(self,addrmode,opcode,operand8,operand16):
         self.set_i(True)
         self.pc += 1
+        return None
     
     # Instruction STA
     # 85 20    sta $20       
@@ -1253,6 +1364,7 @@ class sim6502:
         operand,addr,length = self.get_operand(addrmode,opcode,operand8,operand16)
         self.object_code[addr] = self.a
         self.pc += length
+        return ("w",addr)
 
     # Instruction STX
     # 86 20    stx $20       
@@ -1262,6 +1374,7 @@ class sim6502:
         operand,addr,length = self.get_operand(addrmode,opcode,operand8,operand16)
         self.object_code[addr] = self.x
         self.pc += length
+        return ("w",addr)
         
     # Instruction STY
     # 84 20    sty $20       
@@ -1271,6 +1384,7 @@ class sim6502:
         operand,addr,length = self.get_operand(addrmode,opcode,operand8,operand16)
         self.object_code[addr] = self.y
         self.pc += length
+        return ("w",addr)
 
     # Instruction STZ
     # 64 20    stz $20       
@@ -1281,18 +1395,21 @@ class sim6502:
         operand,addr,length = self.get_operand(addrmode,opcode,operand8,operand16)
         self.object_code[addr] = 0x00
         self.pc += length
+        return ("w",addr)
     
     # Instruction TAX    
     # AA       tax
     def instr_tax(self,addrmode,opcode,operand8,operand16):
         self.x = self.a
         self.pc += 1
+        return None
         
     # Instruction TAY
     # A8       tay
     def instr_tay(self,addrmode,opcode,operand8,operand16):
         self.y = self.a
         self.pc += 1
+        return None
         
     # Instruction TRB
     # 14 20    trb $20       
@@ -1305,6 +1422,7 @@ class sim6502:
         self.object_code[addr]=result
         self.set_z((operand & self.a) == 0x00)
         self.pc += length
+        return ("w",addr)
 
     def instr_tsb(self,addrmode,opcode,operand8,operand16):
         operand,addr,length = self.get_operand(addrmode,opcode,operand8,operand16)
@@ -1312,24 +1430,29 @@ class sim6502:
         self.object_code[addr]=result
         self.set_z((operand & self.a) == 0x00)
         self.pc += length
+        return ("w",addr)
  
     # BA       tsx  
     def instr_tsx(self,addrmode,opcode,operand8,operand16):
         self.x = self.sp
-        self.pc += 1    
+        self.pc += 1  
+        return None  
         
     # 8A       txa     
     def instr_txa(self,addrmode,opcode,operand8,operand16):
         self.a = self.x
         self.pc += 1   
+        return None
         
     # 9A       txs      
     def instr_txs(self,addrmode,opcode,operand8,operand16):
         self.sp = self.x
         self.pc += 1
+        return None
         
     # 98       tya
     def instr_tya(self,addrmode,opcode,operand8,operand16):
         self.a = self.y
-        self.pc += 1    
+        self.pc += 1   
+        return None 
 

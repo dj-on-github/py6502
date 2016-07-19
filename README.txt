@@ -17,7 +17,7 @@ This project is a proof-of-concept for this idea. I use it for hacking my Apple 
 
 The thing that makes it a little different is that instead of offering a 'better assembler language' or 'better macro language' I've stripped down the programs to the very basic functions but written them such that they are intended to be called from a python program that feeds it assembler and gets object code back. This then makes python the macro language. So you get the ability to write assembly code normally, or you can write python to automate the code generation or generate parameterized code, or unroll loops or any number of other things, but using a nice language that makes it easy rather than a set of confusing macro directive written in 1978. 
 
-If you want to instrument a test of a bit of code, it's easy to assemble it and then write a program in python to iterate over your chosen input states and check the outputs and simulate the code repeatedly, calling the simulation of each instruction directly from python, coding in whatever analysis meets your needs.
+If you want to instrument and test of a bit of code, it's easy to assemble it and then write a program in python to iterate over your chosen input states and check the outputs and simulate the code repeatedly, calling the simulation of each instruction directly from python, coding in whatever analysis meets your needs.
 
 The simulator and disassembler works directly with the object code and symbol table from the assembler.
 
