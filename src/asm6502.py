@@ -1186,9 +1186,10 @@ class asm6502():
             tuple = self.allstuff[i]
             (offset, linenumber,labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment, extrabytes, num_extrabytes,linetext) = tuple        
 
+            # Compute the offset for relative branches
             if (lowbyte == -1) and (addressmode == "relative"):
                 destination = self.symbols[value]
-                start = offset
+                start = offset+2 # Delta is relative to the first byte after the branch instruction
                 delta = destination - start
                 lowbyte = delta & 0x00ff
                 if (delta > 127) or (delta < -128):
