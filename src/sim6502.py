@@ -1080,7 +1080,7 @@ class sim6502:
             return None
         else:
             operand,addr,length = self.get_operand(addrmode,opcode,operand8,operand16)
-            result = (operand >> 1) % 256
+            result = (operand >> 1) & 0xff
             self.pc += length
             self.make_flags_nz(result)
             self.object_code[addr]=result
@@ -1176,7 +1176,7 @@ class sim6502:
                 carryin = 0x01
             else:
                 carryin = 0x01
-            result = ((self.a << 1) % 256) | carryin
+            result = ((self.a << 1) & 0xff) | carryin
             self.a = result
             self.set_c(carryin)
             self.pc += 1
@@ -1194,7 +1194,7 @@ class sim6502:
             else:
                 carryin = 0x01
                 
-            result = ((operand << 1) % 256) | carryin
+            result = ((operand << 1) & 0xff) | carryin
             self.set_c(carryout)
             self.object_code[addr] = result
             self.pc += length 
