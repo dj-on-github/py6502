@@ -338,7 +338,7 @@ def dbg6502(object_code, symbol_table):
             tbtu.addstr(leftwidth+3,5,str(event))
             # Exit when escape pressed.
             if type==termbox.EVENT_KEY and key == termbox.KEY_ESC:
-                break
+                return event
             
             if type==type==termbox.EVENT_KEY and key == termbox_util.key_tab:
                 memory_selected = not(memory_selected)
@@ -494,6 +494,7 @@ dis = dis6502(s.object_code,symbols=symbol_table)
 
 # start the debugger
 d = dbg6502(object_code,symbol_table)
+#print d
 
 print "Exited 6502 Debugger"
 

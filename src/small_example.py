@@ -19,5 +19,10 @@ loop:
 lines = thecode.splitlines()
 
 a = asm6502()
-a.assemble(lines)
+(l,s) = a.assemble(lines)
+for line in l:
+    print line
+print
+for line in s:
+    print line
 

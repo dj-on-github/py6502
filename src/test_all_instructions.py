@@ -217,8 +217,13 @@ def go(debug=0):
     lines.append("       nop")
 
     a = asm6502(debug=debug)
-    a.assemble(lines)
+    (listingtext,symboltext) = a.assemble(lines)
 
+    for line in listingtext:
+        print line
+    print
+    for line in symboltext:
+        print line
 go()
 
 

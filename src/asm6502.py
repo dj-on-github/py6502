@@ -2,7 +2,7 @@ import re
 
 class asm6502():
     def __init__(self, debug=0):
-        print "65C02 Assembler"
+        #print "65C02 Assembler"
         self.debuglevel = debug
         self.text_of_lines = list() #of strings
         self.lines = list()   # parsed lines (symbol, opcode, addrmode, value
@@ -1250,21 +1250,33 @@ class asm6502():
                 for i in extrabytes:
                     self.object_code[addr] = i
                     addr = addr + 1
-                
-        print "LISTING"
-        for i in self.listing:
-            print i
-
-        print
-        print "SYMBOL TABLE"
+        
+        listingtext = list()
+        listingtext.append("LISTING") 
+        listingtext += self.listing
+       
+        symboltext = list()
+        symboltext.append("SYMBOL TABLE")
         for label in self.symbols:
             offset = self.symbols[label]
             astring=(("%s" % label).ljust(10)) +(" = "+"$%04X" % offset)
-            print astring
-            
-        print
-        self.print_object_code()
-                
+            symboltext.append(astring)
+ 
+        #print "LISTING"
+        #for i in self.listing:
+        #    print i
+        #
+        #print
+        #print "SYMBOL TABLE"
+        #for label in self.symbols:
+        #    offset = self.symbols[label]
+        #    astring=(("%s" % label).ljust(10)) +(" = "+"$%04X" % offset)
+        #    print astring
+        #    
+        #print
+        #self.print_object_code()
+        return(listingtext,symboltext)
+        
     def print_object_code(self):
         print "OBJECT CODE"
 
