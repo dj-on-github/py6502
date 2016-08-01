@@ -268,7 +268,15 @@ end:   bpl vals
 
     # Instantiate the assembler, assemble the code, grab the object_code
     a = asm6502.asm6502(debug=debug)
-    a.assemble(lines)
+    (listing,symbols)= a.assemble(lines)
+    
+    for line in listing:
+        print line
+    print
+    for line in symbols:
+        print line
+    print
+
     object_code = a.object_code[:]
 
     print

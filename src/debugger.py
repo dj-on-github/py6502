@@ -51,6 +51,7 @@ def draw_commands_view(vptu):
 # Negative	Overflow	(S)     Break	Decimal	Interrupt	Zero	Carry
 # N	        V	        -	    B	    D	    I	        Z	    C
 # -	        -	        -	    -	    -	    -	        -	    -    
+
 def draw_registers_view(vptu,pc,a,x,y,sp,cc):
     cc = cc
     ccstr = ""
@@ -241,7 +242,7 @@ def dbg6502(object_code, symbol_table):
         rightwidth = maxx-leftwidth
               
         # A viewplane to hold the command information      
-        vp_commands=viewplane(width=120,height=4)
+        vp_commands=viewplane(width=maxx+1,height=4)
         vptu_commands = termbox_util(vp_commands) 
         draw_commands_view(vptu_commands)
         

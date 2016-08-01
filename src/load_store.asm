@@ -7,15 +7,18 @@ start:
         ADC #$01 ;comment
         LDA #$55
         STA $11
-        LDA #$FF
+        LDA #$40
         STA $12
+        LDX #$00
 
 loop:
-        STA $13,x
+        STA $10,x
         INX
         SBC #$01
-        CMP #$00
+        ;CMP #$00
         BNE loop
         NOP
+        NOP
+        BRA start
         ORG $fffa
         DW  $0100,$0100,$0100 ; Reset Vector
