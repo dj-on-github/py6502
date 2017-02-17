@@ -1466,4 +1466,38 @@ class asm6502():
         lines = self.intelhex()
         for line in lines:
             print line
+            
+    # returns entire 64K memory as hex in the form of 64 bytes per line.
+    def hex(self,noaddress=False):
+        #print "HEX FORMAT OUTPUT"
+        #print
+        theoutput = list()
+        
+        for  i in xrange(1024):
+            addr = 64*i
+            
+            # Prepend with an address field, or not if not desired
+            if noaddress:
+                line = ""
+            else:
+                line="%04x:" % addr
+            
+            # add the bytes as hex to the line    
+            for j in xrange(64):
+                val = self.object_code[(i*64)+j]
+                
+                # Range check the bytes
+                if val <0:
+                    val = 0
+                if val > 255:
+                    val = 255
+            
+                line = line + ("%02x" % val)
+            theoutput.append(line)
+        return theoutput
+                
+    def print_hex(self):
+        lines = self.hex()
+        for line in lines:
+            print line
         

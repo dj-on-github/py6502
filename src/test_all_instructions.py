@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from asm6502 import asm6502
 
 def go(debug=0):  
@@ -224,6 +226,8 @@ def go(debug=0):
     print
     for line in symboltext:
         print line
+
+    a.print_object_code()
 go()
 
 

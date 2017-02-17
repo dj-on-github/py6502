@@ -450,7 +450,7 @@ class termbox_editableline():
     #         E.G. return a 7 and mark that esc was pressed to the
     #         program can know what to do next.  
     #      
-    def edit(self,validator, contents="", max_width=None):
+    def edit(self,validator, contents="", max_width=None,presenter=None):
         original_contents=contents[:]
         blankstr = " "*self.width
         cursorpos=0
@@ -512,48 +512,52 @@ class termbox_editableline():
 
             # Show the screen then wait for input
             #
-            self.tbinst.present()
-            event = self.tbinst.poll_event()
-            (ttype, ch, tkey, mod, w, h, x, y ) = event
-            c = validator(event,contents)
-            
-            #
-            # Handle esc, return, delete, up, down, left, right and input characters. 
-            #
-            
-            # Return Pressed
-            if c == 7:
-                return (contents)
-            elif (ttype==1) and (tkey ==  27): # ESC pressed
-                return (original_contents)
-            elif (tkey ==  self.tbutil.key_left) or (tkey == self.tbutil.TB_KEY_ARROW_LEFT):
-                #self.tbutil.addstr(self.x,self.y+2," LEFT           ")
-                if cursorpos > 0:
-                    cursorpos = cursorpos - 1
-            elif (tkey ==  self.tbutil.key_right) or (tkey == self.tbutil.TB_KEY_ARROW_RIGHT):
-                #self.tbutil.addstr(self.x,self.y+2," RIGHT          ")
-                if cursorpos < (len(contents)):
-                    cursorpos = cursorpos + 1
-            elif (ttype==1) and (tkey==127): # delete pressed
-                if (cursorpos >= len(contents)) and (cursorpos > 0):  # cursor is at end. Take one off the end
-                    #self.tbutil.addstr(self.x,self.y+2," DELETE END      ")
-                    contents = contents[:-1]
-                    cursorpos -= 1
-                elif (cursorpos > 0) and (cursorpos < len(contents)):  # cursor somewhere in the middle.
-                    #self.tbutil.addstr(self.x,self.y+2," DELETE MID      ")
-                    contents = contents[:cursorpos-1] + contents[cursorpos:]
-                    cursorpos -= 1
-            elif (ttype==1) and (tkey==32): # space pressed
-                    contents = contents[:cursorpos] + " " + contents[cursorpos:]
-                    cursorpos += 1
-                    #self.tbutil.addstr(self.x,self.y+2," ADD SPACE      ")
+            if presenter==None:
+                self.tbinst.present()
+                event = self.tbinst.poll_event()
             else:
-                if c != None:
-                    if len(contents) < max_width:
-                        contents = contents[:cursorpos] + str(c) + contents[cursorpos:]
+                presenter.present()
+                event = presenter.poll_event()
+            (ttype, ch, tkey, mod, w, h, x, y ) = event
+            if event != None:
+                c = validator(event,contents)
+                #
+                # Handle esc, return, delete, up, down, left, right and input characters. 
+                #
+            
+                # Return Pressed
+                if c == 7:
+                    return (contents)
+                elif (ttype==1) and (tkey ==  27): # ESC pressed
+                    return (original_contents)
+                elif (tkey ==  self.tbutil.key_left) or (tkey == self.tbutil.TB_KEY_ARROW_LEFT):
+                    #self.tbutil.addstr(self.x,self.y+2," LEFT           ")
+                    if cursorpos > 0:
+                        cursorpos = cursorpos - 1
+                elif (tkey ==  self.tbutil.key_right) or (tkey == self.tbutil.TB_KEY_ARROW_RIGHT):
+                    #self.tbutil.addstr(self.x,self.y+2," RIGHT          ")
+                    if cursorpos < (len(contents)):
+                        cursorpos = cursorpos + 1
+                elif (ttype==1) and (tkey==127): # delete pressed
+                    if (cursorpos >= len(contents)) and (cursorpos > 0):  # cursor is at end. Take one off the end
+                        #self.tbutil.addstr(self.x,self.y+2," DELETE END      ")
+                        contents = contents[:-1]
+                        cursorpos -= 1
+                    elif (cursorpos > 0) and (cursorpos < len(contents)):  # cursor somewhere in the middle.
+                        #self.tbutil.addstr(self.x,self.y+2," DELETE MID      ")
+                        contents = contents[:cursorpos-1] + contents[cursorpos:]
+                        cursorpos -= 1
+                elif (ttype==1) and (tkey==32): # space pressed
+                        contents = contents[:cursorpos] + " " + contents[cursorpos:]
                         cursorpos += 1
-                        contents = contents[:max_width]
-                    #self.tbutil.addstr(self.x,self.y+2," ADD CHAR      ")
+                        #self.tbutil.addstr(self.x,self.y+2," ADD SPACE      ")
+                else:
+                    if c != None:
+                        if len(contents) < max_width:
+                            contents = contents[:cursorpos] + str(c) + contents[cursorpos:]
+                            cursorpos += 1
+                            contents = contents[:max_width]
+                        #self.tbutil.addstr(self.x,self.y+2," ADD CHAR      ")
 
             # Move window view 
             if (cursorpos >= self.width-1):
@@ -579,6 +583,16 @@ def integer_validator(e,contents):
     else:
         return(ch)
 
+def hex_validator(e,contents):
+    (type, ch, key, mod, w, h, x, y ) = e
+    if (ch != None):
+        if (type==1 and (ch in "ABCDEFabcdef0123456789")):
+            return(ch)
+    elif type==termbox.EVENT_KEY and key == termbox.KEY_ENTER:
+        return(7)
+    else:
+        return(ch)
+        
 def decimal_validator(e,contents):
     (type, ch, key, mod, w, h, x, y ) = e
     if type==termbox.EVENT_KEY and key == termbox.KEY_ENTER:

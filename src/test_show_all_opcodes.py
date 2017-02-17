@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import asm6502
 
 a = asm6502.asm6502()

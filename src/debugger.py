@@ -18,6 +18,10 @@ import termbox
 # temrbox_util adds a curses like interface to termbox
 from termbox_util import termbox_util
 from termbox_util import termbox_editableline
+from termbox_util import hex_validator
+from termbox_util import integer_validator
+from termbox_util import text_validator
+from termbox_util import decimal_validator
 
 # Also get the virtual viewplane support
 # Allows virtual text screen that can be displayed
@@ -28,6 +32,8 @@ from termbox_util import viewplane
 
 leftwidth = 40
 memory_selected = True
+disassembly_selected = False
+observer_selected = False
 
 current_pc_disassembly_line = 0
 disassembly_count = 0
@@ -44,7 +50,7 @@ def draw_commands_view(vptu):
     vptu.clear()
     vptu.border()
     vptu.addstr(x=4,y=0,thestring="COMMANDS",bold=False)
-    vptu.addstr(x=1, y=1, thestring="r: Reset, I: Irq, N:Nmi, S:Step, K:sKip, G: Goto Addr, i/k:mem up/down, o/l:page up/down", bold=False)
+    vptu.addstr(x=1, y=1, thestring="R: Reset, I: Irq, N:Nmi, S:Step, K:sKip, G: Goto Addr, o/l:page up/down", bold=False)
     vptu.addstr(x=1, y=2, thestring="ESC: exit B: set Breakpoint M:Modify Memory", bold=False)
 
 # 7	        6	        5	    4	    3	    2	        1	    0
@@ -68,6 +74,31 @@ def draw_registers_view(vptu,pc,a,x,y,sp,cc):
     vptu.addstr(x=1, y=1, thestring="PC:%04x A:%02x X:%02x Y:%02x NVsBDIZC" % (pc,a,x,y), bold=False)
     vptu.addstr(x=1, y=2, thestring="SP:%04x          Flags:%s" % (sp,ccstr), bold=False)  
 
+def draw_observer_view(vptu,observer_selected,event):
+    vptu.clear()
+    vptu.border()
+    
+    # Read the NMI, IRQ and Reset vectors from memory
+    ih = object_code[0xffff]
+    il = object_code[0xfffe]
+    rh = object_code[0xfffd]
+    rl = object_code[0xfffc]
+    nh = object_code[0xfffb]
+    nl = object_code[0xfffa]
+    
+    # Turn them into 16 bit integers.        
+    resetvec = rl + (rh << 8)
+    nmivec = nl + (nh << 8)
+    irqvec = il + (ih << 8)
+    
+    # Print the vectors in the observer window
+    vptu.addstr(x=4,y=0,thestring="OBSERVER",bold=observer_selected)
+    vptu.addstr(x=1, y=1, thestring="ResetVec:%04x NMIVec:%04x IRQVec:%04x" % (resetvec,nmivec,irqvec), bold=False)
+    #vptu.addstr(x=1, y=2, thestring="??:%04x          Flags:%s" % (sp,ccstr), bold=False)  
+    
+    # Debug output to show the character event last received.
+    vptu.addstr(1,2,str(event))
+    
 def draw_action_view(vptu,actionstr):
     vptu.clear()
     vptu.border()
@@ -180,16 +211,24 @@ def draw_disassembly_inner_view(vptu,object_code):
     # Now work forwards
     forwardcount = 0
     address = s.pc
-    while (forwardcount < 50) and (address < 0xffff): 
+    
+    # Work out contents for the next 50 lines.
+    while (forwardcount < 50) and (address < 0xffff):
+        # Look forward for the next instruction. Work out if it's instruction or data
+        
+        # If it's not in the instruction map, it's data.
         if (a.instruction_map[address+1])==None:
             address = address+1
             thetype = "data"
+        # The next byte is positive in the instruction map, so it must be an instruction.
         elif (a.instruction_map[address+1] >= 0) and (a.instruction_map[address+1] < 256):
             address = address +1
             thetype = "instruction"
+        # An instruction with one operand followed by data
         elif (a.instruction_map[address+1]==-1) and (a.instruction_map[address+2] >= 0) and (a.instruction_map[address+2] < 256):
             address = address +2
             thetype = "instruction"
+        # An instruction with a 2 byte operand.
         elif (a.instruction_map[address+1]==-1) and (a.instruction_map[address+3] >= 0) and (a.instruction_map[address+3] < 256):
             address = address +3
             thetype = "instruction"
@@ -220,14 +259,28 @@ def draw_disassembly_inner_view(vptu,object_code):
     current_pc_disassembly_line = reversecount
     disassembly_count = len(linelist)
     return (current_pc_disassembly_line,disassembly_count)
-def draw_disassembly_outer_view(vptu,memory_selected):
+    
+def draw_disassembly_outer_view(vptu,disassembly_selected):
     vptu.clear()
     vptu.border()
-    vptu.addstr(x=4,y=0,thestring="DISASSEMBLY",bold=not(memory_selected))
+    vptu.addstr(x=4,y=0,thestring="DISASSEMBLY",bold=disassembly_selected)
 
+# g was pressed so we bring up a window for the address or symbol to by typed into
+def draw_goto_view(tb,tbtu,thetext):    
+    #A viewplane in which to type
+    tbtu.clear
+    tbtu.border()
+    tbtu.addstr(1,1,"Goto Addr(hex):"+str(thetext))
+    
 def dbg6502(object_code, symbol_table):
     object_code = s.object_code
+    
     memory_selected = True
+    disassembly_selected = False
+    observer_selected = False
+    
+    event = "no_event_yet"
+    
     # Use a real termbox window tbinst.   
     with termbox.Termbox() as tb:
         # The things we seen in the main view are composed
@@ -255,6 +308,16 @@ def dbg6502(object_code, symbol_table):
         vp_action=viewplane(width=leftwidth,height=4)
         vptu_action = termbox_util(vp_action)
         draw_action_view(vptu_action,"Nothing Yet")
+
+        # A Viewplane to hold the goto input
+        vp_goto=viewplane(width=28,height=3)
+        vptu_goto=termbox_util(vp_goto)
+        draw_goto_view(vp_goto, vptu_goto,"")
+    
+        # A viewplane to hold the register state   
+        vp_observer=viewplane(width=maxx+1-leftwidth,height=8)
+        vptu_observer = termbox_util(vp_observer)
+        draw_observer_view(vptu_observer,observer_selected,"no_event")
         
         # Since we have a sliding memory view but want a box around the
         # visible window, we will have a two deep hierarchy - the outer
@@ -275,6 +338,11 @@ def dbg6502(object_code, symbol_table):
         pvid_commands = tbtu.add_persistent_viewplane(vp_commands,0,0)
         pvid_registers = tbtu.add_persistent_viewplane(vp_registers,0,4)
         pvid_action = tbtu.add_persistent_viewplane(vp_action,0,8)
+        pvid_observer = tbtu.add_persistent_viewplane(vp_observer,leftwidth,4)
+        #pvid_goto = tbtu.add_persistent_viewplane(vp_goto,10,10)
+        
+        # Goto window is only visible when taking goto input. Hide it.
+        #tbtu.deactivate_persistent_vp(pvid_goto)
         
         # The memory view is a window into the viewplane since the
         # viewplane has the whole of memory laid out in.
@@ -293,7 +361,7 @@ def dbg6502(object_code, symbol_table):
         # The outer to hold the border and the innner
         vp_disassembly_outer=viewplane(width=maxx+1-leftwidth,height=maxy-12)
         vptu_disassembly_outer = termbox_util(vp_disassembly_outer)
-        draw_disassembly_outer_view(vptu_disassembly_outer,memory_selected)
+        draw_disassembly_outer_view(vptu_disassembly_outer,disassembly_selected)
         
         # The disassembly view is a window into the viewplane since the
         # viewplane has a lot of listing laid out in.
@@ -314,6 +382,8 @@ def dbg6502(object_code, symbol_table):
             (cpdl,dc) = draw_disassembly_inner_view(vptu_disassembly_inner,object_code)
             #draw_memory_inner_view(vptu_memory_inner, object_code)
             vptu_memory_outer.present()
+            
+            # Compute where to place the disassembly in memory
             new_srcx=0
             if cpdl > 0:
                 new_srcy = cpdl -10
@@ -321,10 +391,12 @@ def dbg6502(object_code, symbol_table):
                     new_srcy = 0
             else:
                 new_srcy = 0
+                
             vptu_disassembly_outer.move_persistent_viewplane_window(pvid_memory_inner,new_srcx,new_srcy) 
             #vptu_disassembly_outer.addstr(20,0,"cpdl="+str(cpdl)+" len="+str(dc)+" ")
             vptu_disassembly_outer.present() 
-            draw_registers_view(vptu_registers,s.pc,s.a,s.x,s.y,s.sp,s.cc)                   
+            draw_registers_view(vptu_registers,s.pc,s.a,s.x,s.y,s.sp,s.cc) 
+            draw_observer_view(vptu_observer,observer_selected,event)                  
             tbtu.present()
             
             # Get a keypress
@@ -336,34 +408,73 @@ def dbg6502(object_code, symbol_table):
             #if type==termbox.EVENT_KEY and ch=='e':
             #    content=el.edit(el_validator,max_width=10)
  
-            tbtu.addstr(leftwidth+3,5,str(event))
+            #vptu_observer.addstr(1,2,str(event))
             # Exit when escape pressed.
             if type==termbox.EVENT_KEY and key == termbox.KEY_ESC:
                 return event
             
-            if type==type==termbox.EVENT_KEY and key == termbox_util.key_tab:
-                memory_selected = not(memory_selected)
+            if type==termbox.EVENT_KEY and key == termbox_util.key_tab:
+            
+                # Rotate through selecting one of the three windows
+                if memory_selected:
+                    memory_selected = False
+                    observer_selected = True
+                    disassembly_selected = False
+                elif observer_selected:
+                    memory_selected = False
+                    observer_selected = False
+                    disassembly_selected = True
+                elif disassembly_selected:
+                    memory_selected = True
+                    observer_selected = False
+                    disassembly_selected = False
+                else:
+                    memory_selected = False
+                    observer_selected = True
+                    disassembly_selected = False
+                
                 draw_memory_outer_view(vptu_memory_outer,memory_selected)
-                draw_disassembly_outer_view(vptu_disassembly_outer,memory_selected)
+                draw_disassembly_outer_view(vptu_disassembly_outer,disassembly_selected)
+                draw_observer_view(vptu_observer,observer_selected,event)
                 
             # When r is pressed, sent a reset to the simulator
-            elif type==termbox.EVENT_KEY and ch=='R':
+            elif type==termbox.EVENT_KEY and (ch=='r' or ch=='r'):
                 s.reset()
                 vptu_action.addstr(1,1,"RESET          ")
                 draw_memory_inner_view(vptu_memory_inner, object_code)
                 
             
-            # When r is pressed, sent a reset to the simulator
-            elif type==termbox.EVENT_KEY and ch=='I':
+            # When i is pressed, sent an irq  to the simulator
+            elif type==termbox.EVENT_KEY and (ch=='I' or ch=='i'):
                 s.irq()
                 vptu_action.addstr(1,1,"IRQ            ")
                 draw_memory_inner_view(vptu_memory_inner, object_code)
             
-            # When r is pressed, sent a reset to the simulator
-            elif type==termbox.EVENT_KEY and ch=='N':
+            # When n is pressed, sent an NMI to the simulator
+            elif type==termbox.EVENT_KEY and (ch=='N' or ch=='n'):
                 s.reset()
                 vptu_action.addstr(1,1,"NMI            ")
                 draw_memory_inner_view(vptu_memory_inner, object_code)
+                
+            # When g is pressed, input a goto address
+            elif type==termbox.EVENT_KEY and (ch=='G' or ch=='g'):
+                s.reset()
+                
+                tbtu.draw_viewplane(vp_goto,10,10)
+                tb.present()
+                #tbtu.activate_persistent_vp(pvid_goto)
+                el = termbox_editableline(tb,tbtu, 26,11, 5)
+                tb.present()
+                
+                thetext = el.edit(hex_validator, contents="", max_width=4)
+                
+                #tbtu.deactivate_persistent_vp(pvid_goto)
+                
+                if len(thetext) > 0:
+                    thetext = "0x"+thetext
+                    addr = int(eval(thetext))
+                    if addr < 0x10000:
+                        s.pc = addr
                     
             # When s is pressed, execute one instruction
             elif type==termbox.EVENT_KEY and ch=='s':
@@ -442,7 +553,7 @@ def dbg6502(object_code, symbol_table):
 
 # Start with argument parsing
 
-parser = argparse.ArgumentParser(description='A 65C02 debugger built on the py6502 assembler, simulator and debugger')
+parser = argparse.ArgumentParser(description='A 65C02 debugger built on the py6502 assembler, diassembler and simulator')
 
 parser.add_argument("-v","--verbose",action="store_true", dest="verbose", default=False, help="Print status messages to stderr")
 parser.add_argument("filename", help="read assembly from filename", nargs='?', metavar="FILE")
