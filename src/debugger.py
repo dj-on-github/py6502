@@ -181,7 +181,7 @@ def draw_disassembly_inner_view(vptu,object_code):
     # Then we have a list of lines to display.
     # Show them in the window and highlight the instruction at pc.
     linelist = list()
-    line = dis.disassemble_line(s.pc) # The first line at pc
+    line, _ = dis.disassemble_line(s.pc) # The first line at pc
     linelist.append(line)
     
     # Now work backwards from pc
@@ -239,7 +239,7 @@ def draw_disassembly_inner_view(vptu,object_code):
         if thetype == "data":
             line = "           %04x %02x       DW  $%02x" % (address,object_code[address],object_code[address])
         else:
-            line = dis.disassemble_line(address)
+            line, _ = dis.disassemble_line(address)
         linelist.append(line)
         forwardcount += 1
         
@@ -478,7 +478,7 @@ def dbg6502(object_code, symbol_table):
                     
             # When s is pressed, execute one instruction
             elif type==termbox.EVENT_KEY and ch=='s':
-                distxt = dis.disassemble_line(s.pc)
+                distxt, _ = dis.disassemble_line(s.pc)
                 (action, addr) = s.execute()
                 vptu_action.addstr(1,1,distxt.ljust(leftwidth-2))
                 draw_registers_view(vptu_registers,s.pc,s.a,s.x,s.y,s.sp,s.cc)

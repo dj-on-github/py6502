@@ -314,7 +314,7 @@ end:   bpl vals
     # Execute 200 instructions
     for i in xrange(200):
         # Disassemble the current instruction
-        distxt = d.disassemble_line(s.pc)
+        distxt, _ = d.disassemble_line(s.pc)
 
         # Execute that instruction
         s.execute()

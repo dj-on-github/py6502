@@ -13,17 +13,16 @@ class dis6502:
        for i in xrange(len(self.object_code)):
             if self.object_code[i] < 0:
                 self.object_code[i] = 0x00
- 
+
+       self.labels = {}
        if symbols==None:
             self.have_symbols = False
        else:
             self.have_symbols = True
-            
+
             self.symbols = symbols
-            self.labels = dict()
-            for label in self.symbols:
-                offset = self.symbols[label]
-                self.labels[offset]=label
+            for label, offset in self.symbols.iteritems():
+                self.labels[offset] = label
        self.build_opcode_table()
 
     def build_opcode_table(self):
@@ -44,7 +43,7 @@ class dis6502:
         self.hexcodes[0xD0] = ("bne","relative")
         self.hexcodes[0xE0] = ("cpx","immediate")
         self.hexcodes[0xF0] = ("beq","relative")
-        
+
         self.hexcodes[0x01] = ("ora","zeropageindexedindirectx")
         self.hexcodes[0x11] = ("ora","zeropageindexedindirecty")
         self.hexcodes[0x21] = ("and","zeropageindexedindirectx")
@@ -61,7 +60,7 @@ class dis6502:
         self.hexcodes[0xD1] = ("cmp","zeropageindexedindirecty")
         self.hexcodes[0xE1] = ("sbc","zeropageindexedindirectx")
         self.hexcodes[0xF1] = ("sbc","zeropageindexedindirecty")
-        
+
         self.hexcodes[0x02] = ("","")
         self.hexcodes[0x12] = ("ora","zeropageindirect")
         self.hexcodes[0x22] = ("","")
@@ -78,7 +77,7 @@ class dis6502:
         self.hexcodes[0xD2] = ("cmp","zeropageindirect")
         self.hexcodes[0xE2] = ("","")
         self.hexcodes[0xF2] = ("sbc","zeropageindirect")
-        
+
         self.hexcodes[0x03] = ("","")
         self.hexcodes[0x13] = ("","")
         self.hexcodes[0x23] = ("","")
@@ -95,7 +94,7 @@ class dis6502:
         self.hexcodes[0xD3] = ("","")
         self.hexcodes[0xE3] = ("","")
         self.hexcodes[0xF3] = ("","")
-        
+
         self.hexcodes[0x04] = ("tsb","zeropage")
         self.hexcodes[0x14] = ("trb","zeropage")
         self.hexcodes[0x24] = ("bit","zeropage")
@@ -112,7 +111,7 @@ class dis6502:
         self.hexcodes[0xD4] = ("","")
         self.hexcodes[0xE4] = ("cpx","zeropage")
         self.hexcodes[0xF4] = ("","")
-        
+
         self.hexcodes[0x05] = ("ora","zeropage")
         self.hexcodes[0x15] = ("ora","zeropagex")
         self.hexcodes[0x25] = ("and","zeropage")
@@ -129,7 +128,7 @@ class dis6502:
         self.hexcodes[0xD5] = ("cmp","zeropagex")
         self.hexcodes[0xE5] = ("sbc","zeropage")
         self.hexcodes[0xF5] = ("sbc","zeropagex")
-        
+
         self.hexcodes[0x06] = ("asl","zeropage")
         self.hexcodes[0x16] = ("asl","zeropagex")
         self.hexcodes[0x26] = ("rol","zeropage")
@@ -146,7 +145,7 @@ class dis6502:
         self.hexcodes[0xD6] = ("dec","zeropagex")
         self.hexcodes[0xE6] = ("inc","zeropage")
         self.hexcodes[0xF6] = ("inc","zeropagex")
-        
+
         self.hexcodes[0x07] = ("","")
         self.hexcodes[0x17] = ("","")
         self.hexcodes[0x27] = ("","")
@@ -163,7 +162,7 @@ class dis6502:
         self.hexcodes[0xD7] = ("","")
         self.hexcodes[0xE7] = ("","")
         self.hexcodes[0xF7] = ("","")
-        
+
         self.hexcodes[0x08] = ("php","implicit")
         self.hexcodes[0x18] = ("clc","implicit")
         self.hexcodes[0x28] = ("plp","implicit")
@@ -180,7 +179,7 @@ class dis6502:
         self.hexcodes[0xD8] = ("cld","implicit")
         self.hexcodes[0xE8] = ("inx","implicit")
         self.hexcodes[0xF8] = ("sed","implicit")
-        
+
         self.hexcodes[0x09] = ("ora","immediate")
         self.hexcodes[0x19] = ("ora","absolutey")
         self.hexcodes[0x29] = ("and","immediate")
@@ -197,7 +196,7 @@ class dis6502:
         self.hexcodes[0xD9] = ("cmp","absolutey")
         self.hexcodes[0xE9] = ("sbc","immediate")
         self.hexcodes[0xF9] = ("sbc","absolutey")
-        
+
         self.hexcodes[0x0A] = ("asl","accumulator")
         self.hexcodes[0x1A] = ("ina","accumulator")
         self.hexcodes[0x2A] = ("rol","accumulator")
@@ -214,7 +213,7 @@ class dis6502:
         self.hexcodes[0xDA] = ("phx","implicit")
         self.hexcodes[0xEA] = ("nop","implicit")
         self.hexcodes[0xFA] = ("plx","implicit")
-        
+
         self.hexcodes[0x0B] = ("","")
         self.hexcodes[0x1B] = ("","")
         self.hexcodes[0x2B] = ("","")
@@ -248,7 +247,7 @@ class dis6502:
         self.hexcodes[0xDC] = ("","")
         self.hexcodes[0xEC] = ("cpx","absolute")
         self.hexcodes[0xFC] = ("","")
-        
+
         self.hexcodes[0x0D] = ("ora","absolute")
         self.hexcodes[0x1D] = ("ora","absolutex")
         self.hexcodes[0x2D] = ("and","absolute")
@@ -265,7 +264,7 @@ class dis6502:
         self.hexcodes[0xDD] = ("cmp","absolutex")
         self.hexcodes[0xED] = ("sbc","absolute")
         self.hexcodes[0xFD] = ("sbc","absolutex")
-        
+
         self.hexcodes[0x0E] = ("asl","absolute")
         self.hexcodes[0x1E] = ("asl","absolutex")
         self.hexcodes[0x2E] = ("rol","absolute")
@@ -282,7 +281,7 @@ class dis6502:
         self.hexcodes[0xDE] = ("dec","absolutex")
         self.hexcodes[0xEE] = ("inc","absolute")
         self.hexcodes[0xFE] = ("inc","absolutex")
-        
+
         self.hexcodes[0x0F] = ("","")
         self.hexcodes[0x1F] = ("","")
         self.hexcodes[0x2F] = ("","")
@@ -321,7 +320,7 @@ class dis6502:
         addr_text = "%04x " % address
 
         # Format the operand based on the addressmode
-        length = 1 
+        length = 1
         if addrmode == "zeropageindexedindirectx":
             operandtext = "($%02x,x)" % operand8
             length = 2
@@ -366,12 +365,12 @@ class dis6502:
                 operandtext = "+$%02x" % operand8
             else:
                 offset = (operand8 & 0x7f) -128
-                
+
                 offset = -offset
                 operandtext = "-$%02x" %offset
             length = 2
         elif addrmode == "accumulator":
-            operandtext = "A" 
+            operandtext = "A"
             length = 1
         elif addrmode == "implicit":
             operandtext = ""
@@ -392,9 +391,17 @@ class dis6502:
             binary_text = "%02x %02x    " % (opcode_hex, operandl)
         else:
             binary_text = "%02x %02x %02x " % (opcode_hex, operandl, operandh)
-           
+
         the_text =  label+" "+addr_text+binary_text
         the_text += (opcode.ljust(5))
         the_text += operandtext
-        return (the_text)
+        return (the_text, length)
+
+    def disassemble_region(self, address, region_length):
+        current_address = address
+        while current_address < address + region_length:
+            (line, length) = self.disassemble_line(current_address)
+            yield line
+            current_address += length
+
 
