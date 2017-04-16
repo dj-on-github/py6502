@@ -4,8 +4,6 @@
 # The 65C02 Simulator
 #
 
-import math
-
 
 class dis6502:
     def __init__(self, object_code, symbols=None):
