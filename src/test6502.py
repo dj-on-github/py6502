@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 
 import asm6502
-import sim6502
 import dis6502
+import sim6502
 
-def go(debug=0):  
-    assembly_src="""
+
+def go(debug=0):
+    assembly_src = """
             org $0000
             JMP overthere 
 bhaddr:     dw &brkhandler,$0102,&another,&labels ; insert address for brkhandler
@@ -268,8 +269,8 @@ end:   bpl vals
 
     # Instantiate the assembler, assemble the code, grab the object_code
     a = asm6502.asm6502(debug=debug)
-    (listing,symbols)= a.assemble(lines)
-    
+    (listing, symbols) = a.assemble(lines)
+
     for line in listing:
         print line
     print
@@ -287,10 +288,10 @@ end:   bpl vals
     # Output Srecords
     print
     print "SRECORDS"
-    a.print_srecords(01,01,"ModuleName","Comment")
+    a.print_srecords(01, 01, "ModuleName", "Comment")
     print
 
-    #instantiate the simulator
+    # Instantiate the simulator
     s = sim6502.sim6502(object_code, symbols=a.symbols)
 
     # Instantiate the disassembler
@@ -306,10 +307,10 @@ end:   bpl vals
     print "SIMULATION START"
     print
     # Print a header for the simulator/disassembler output
-    print ("LABEL      " + "ADDR HEX      INSTR").ljust(status_indent)+" PC   A  X  Y  SP   Status"
+    print ("LABEL      " + "ADDR HEX      INSTR").ljust(status_indent) + " PC   A  X  Y  SP   Status"
 
     # Print the initial state
-    print " ".ljust(status_indent) + " %04x %02x %02x %02x %04x %02x" % (s.pc,s.a,s.x,s.y,s.sp,s.cc)
+    print " ".ljust(status_indent) + " %04x %02x %02x %02x %04x %02x" % (s.pc, s.a, s.x, s.y, s.sp, s.cc)
 
     # Execute 200 instructions
     for i in xrange(200):
@@ -320,8 +321,7 @@ end:   bpl vals
         s.execute()
 
         # Print out the disassembled instruction followed by the simulator state
-        print distxt.ljust(status_indent) + " %04x %02x %02x %02x %04x %02x" % (s.pc,s.a,s.x,s.y,s.sp,s.cc)
+        print distxt.ljust(status_indent) + " %04x %02x %02x %02x %04x %02x" % (s.pc, s.a, s.x, s.y, s.sp, s.cc)
+
 
 go()
-
-    
