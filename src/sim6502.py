@@ -3,7 +3,7 @@
 #
 # The 65C02 Simulator
 #
-class sim6502:
+class sim6502(object):
     def __init__(self, object_code, symbols=None):
         self.pc = 0x0000
         self.a = 0x00
@@ -28,6 +28,7 @@ class sim6502:
                 offset = self.symbols[label]
                 self.labels[offset] = label
 
+    # TODO: factor out to common code
     def build_opcode_table(self):
         self.hexcodes = dict()
         self.hexcodes[0x00] = ("brk", "implicit")
@@ -478,6 +479,7 @@ class sim6502:
         if (opcode >= 0) and (opcode < 256):
             instruction, addrmode = self.hexcodes[opcode]
             if (instruction != ""):
+                # TODO: construct a method dispatch table once instead of every time
                 methodname = "instr_" + instruction
                 # print "METHODNAME:"+methodname
                 method = getattr(self, methodname, lambda: "nothing")
