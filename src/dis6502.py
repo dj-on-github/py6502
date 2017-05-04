@@ -324,7 +324,7 @@ class dis6502:
             operandtext = "($%02x,x)" % operand8
             length = 2
         elif addrmode == "zeropageindexedindirecty":
-            operandtext = "($%02x,y)" % operand8
+            operandtext = "($%02x),y" % operand8
             length = 2
         elif addrmode == "zeropageindirect":
             operandtext = "($%02x)" % operand8
