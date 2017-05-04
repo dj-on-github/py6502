@@ -384,7 +384,7 @@ class sim6502(object):
         elif addrmode == "zeropageindexedindirecty":
             indirectaddr = operand8
             addr = (self.memory_map.Read(indirectaddr + 1) << 8) + self.memory_map.Read(indirectaddr)
-            addr = addr + self.x
+            addr = addr + self.y
             operand = self.memory_map.Read(addr)
             length = 2
         elif addrmode == "zeropageindirect":
@@ -422,8 +422,8 @@ class sim6502(object):
             length = 3
         elif addrmode == "indirect":
             indirectaddr = operand16
-            addr = (self.memory_map.Read(addr + 1) << 8) + self.memory_map.Read(addr)
-            operand = self.memory_map.Read(addr) | (self.memory_map.Read(addr + 1) << 8)
+            addr = (self.memory_map.Read(indirectaddr + 1) << 8) + self.memory_map.Read(indirectaddr)
+            operand = (self.memory_map.Read(addr + 1) << 8) + self.memory_map.Read(addr)
             length = 3
         elif addrmode == "accumulator":
             addr = None
@@ -472,6 +472,7 @@ class sim6502(object):
         if address == None:
             address = self.pc
         opcode = self.memory_map.Execute(address)
+        # TODO: only fetch the number of operand bytes appropriate for the instruction
         operand8 = self.memory_map.Execute((address + 1) % 65536)
         hi = self.memory_map.Execute((address + 2) % 65536)
         operand16 = operand8 + ((hi << 8) & 0xff00)

@@ -323,5 +323,7 @@ end:   bpl vals
         # Print out the disassembled instruction followed by the simulator state
         print distxt.ljust(status_indent) + " %04x %02x %02x %02x %04x %02x" % (s.pc, s.a, s.x, s.y, s.sp, s.cc)
 
+    print s.memory_map.Dump()
+
 if __name__ == "__main__":
     main()
