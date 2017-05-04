@@ -1,20 +1,20 @@
-#!/usr/bin/env python
+import memory_map
 
 #
 # The 65C02 Simulator
 #
 class sim6502(object):
-    def __init__(self, object_code, symbols=None):
+    def __init__(self, object_code, address=0x0, symbols=None):
         self.pc = 0x0000
         self.a = 0x00
         self.x = 0x00
         self.y = 0x00
         self.sp = 0x0100
         self.cc = 0x00
-        self.object_code = object_code[:]
-        for i in xrange(len(self.object_code)):
-            if self.object_code[i] < 0:
-                self.object_code[i] = 0x00
+        
+        self.memory_map = memory_map.MemoryMap()
+        self.memory_map.InitializeMemory(address, object_code)
+
         self.build_opcode_table()
 
         if symbols == None:
@@ -308,29 +308,29 @@ class sim6502(object):
         self.x = 0x00
         self.y = 0x00
         self.sp = 0x0100
-        lowaddr = self.object_code[0xfffc]
-        highaddr = self.object_code[0xfffd]
+        lowaddr = self.memory_map.Read(0xfffc)
+        highaddr = self.memory_map.Read(0xfffd)
         if (lowaddr != None) and (lowaddr > -1) and (highaddr != None) and (highaddr > -1):
             address = (lowaddr & 0xff) | ((highaddr << 8) & 0xff00)
             self.pc = address
             return True
         else:
-            print("ERROR: Bad reset vector 0x" + str(self.object_code[0xfffc]) + ",0x" + str(self.object_code[0xfffd]))
+            print("ERROR: Bad reset vector 0x" + str(self.memory_map.Read(0xfffc)) + ",0x" + str(self.memory_map.Read(0xfffd)))
             return False
 
     def nmi(self):
         # Read the NMI vector
-        lowaddr = self.object_code[0xfffe]
-        highaddr = self.object_code[0xffff]
+        lowaddr = self.memory_map.Read(0xfffe)
+        highaddr = self.memory_map.Read(0xffff)
         if (lowaddr != None) and (lowaddr > -1) and (highaddr != None) and (highaddr > -1):
             address = (lowaddr & 0xff) | ((highaddr << 8) & 0xff00)
         else:
             return False
 
         # push PC and status on stack
-        self.object_code[self.sp] = ((self.pc >> 8) & 0xff)
-        self.object_code[self.sp + 1] = (self.pc & 0xff)
-        self.object_code[self.sp + 2] = self.cc | 0x20
+        self.memory_map.Write(self.sp, (self.pc >> 8) & 0xff)
+        self.memory_map.Write(self.sp + 1, self.pc & 0xff)
+        self.memory_map.Write(self.sp + 2, self.cc | 0x20)
         self.sp += 3
 
         # Set PC to the NMI vector
@@ -339,17 +339,17 @@ class sim6502(object):
 
     def irq(self):
         # Read the IRQ vector
-        lowaddr = self.object_code[0xfffa]
-        highaddr = self.object_code[0xfffb]
+        lowaddr = self.memory_map.Read(0xfffa)
+        highaddr = self.memory_map.Read(0xfffb)
         if (lowaddr != None) and (lowaddr > -1) and (highaddr != None) and (highaddr > -1):
             address = (lowaddr & 0xff) | ((highaddr << 8) & 0xff00)
         else:
             return False
 
         # push PC and status on stack
-        self.object_code[self.sp] = ((self.pc >> 8) & 0xff)
-        self.object_code[self.sp + 1] = (self.pc & 0xff)
-        self.object_code[self.sp + 2] = self.cc
+        self.memory_map.Write(self.sp, (self.pc >> 8) & 0xff)
+        self.memory_map.Write(self.sp + 1, self.pc & 0xff)
+        self.memory_map.Write(self.sp + 2, self.cc)
         self.sp += 3
 
         # Set PC to the NMI vector
@@ -378,31 +378,31 @@ class sim6502(object):
         # print get operand addrmode="+str(addrmode)+" opcode:"+str(opcode)+" op8:"+str(operand8)
         if addrmode == "zeropageindexedindirectx":
             indirectaddr = operand8 + self.x
-            addr = (self.object_code[indirectaddr + 1] << 8) + self.object_code[indirectaddr]
-            operand = self.object_code[addr]
+            addr = (self.memory_map.Read(indirectaddr + 1) << 8) + self.memory_map.Read(indirectaddr)
+            operand = self.memory_map.Read(addr)
             length = 2
         elif addrmode == "zeropageindexedindirecty":
             indirectaddr = operand8
-            addr = (self.object_code[indirectaddr + 1] << 8) + self.object_code[indirectaddr]
+            addr = (self.memory_map.Read(indirectaddr + 1) << 8) + self.memory_map.Read(indirectaddr)
             addr = addr + self.x
-            operand = self.object_code[addr]
+            operand = self.memory_map.Read(addr)
             length = 2
         elif addrmode == "zeropageindirect":
             indirectaddr = operand8
-            addr = (self.object_code[indirectaddr + 1] << 8) + self.object_code[indirectaddr]
-            operand = self.object_code[addr]
+            addr = (self.memory_map.Read(indirectaddr + 1) << 8) + self.memory_map.Read(indirectaddr)
+            operand = self.memory_map.Read(addr)
             length = 2
         elif addrmode == "zeropage":
             addr = operand8
-            operand = self.object_code[addr]
+            operand = self.memory_map.Read(addr)
             length = 2
         elif addrmode == "zeropagex":
             addr = operand8 + self.x
-            operand = self.object_code[addr]
+            operand = self.memory_map.Read(addr)
             length = 2
         elif addrmode == "zeropagey":
             addr = operand8 + self.y
-            operand = self.object_code[addr]
+            operand = self.memory_map.Read(addr)
             length = 2
         elif addrmode == "immediate":
             addr = None
@@ -410,20 +410,20 @@ class sim6502(object):
             length = 2
         elif addrmode == "absolutey":
             addr = operand16 + self.y
-            operand = self.object_code[addr]
+            operand = self.memory_map.Read(addr)
             length = 3
         elif addrmode == "absolute":
             addr = operand16
-            operand = self.object_code[addr]
+            operand = self.memory_map.Read(addr)
             length = 3
         elif addrmode == "absolutex":
             addr = operand16 + self.x
-            operand = self.object_code[addr]
+            operand = self.memory_map.Read(addr)
             length = 3
         elif addrmode == "indirect":
             indirectaddr = operand16
-            addr = (self.object_code[addr + 1] << 8) + self.object_code[addr]
-            operand = self.object_code[addr] | (self.object_code[addr + 1] << 8)
+            addr = (self.memory_map.Read(addr + 1) << 8) + self.memory_map.Read(addr)
+            operand = self.memory_map.Read(addr) | (self.memory_map.Read(addr + 1) << 8)
             length = 3
         elif addrmode == "accumulator":
             addr = None
@@ -446,21 +446,21 @@ class sim6502(object):
             length = 3
         elif addrmode == "indirect":
             indirectaddr = operand16
-            addr = (self.object_code[indirectaddr + 1] << 8) + self.object_code[indirectaddr]
+            addr = (self.memory_map.Read(indirectaddr + 1) << 8) + self.memory_map.Read(indirectaddr)
             length = 3
         elif addrmode == "absoluteindexedindirect":
             indirectaddr = operand16 + self.x
-            addr = (self.object_code[indirectaddr + 1] << 8) + self.object_code[indirectaddr]
+            addr = (self.memory_map.Read(indirectaddr + 1) << 8) + self.memory_map.Read(indirectaddr)
             length = 3
         elif addrmode == "absoluteindirect":
             indirectaddr = operand16
-            addr = (self.object_code[indirectaddr + 1] << 8) + self.object_code[indirectaddr]
+            addr = (self.memory_map.Read(indirectaddr + 1) << 8) + self.memory_map.Read(indirectaddr)
             length = 3
         else:
             print "ERROR: Address mode %s not found for JMP or JSR" % addrmode
             print "     : PC = 0x%04x" % self.pc
             exit()
-        operand = self.object_code[addr]
+        operand = self.memory_map.Read(addr)
         return (operand, addr, length)
 
     # Execute the instruction at the current program counter location.
@@ -471,9 +471,9 @@ class sim6502(object):
     def execute(self, address=None):
         if address == None:
             address = self.pc
-        opcode = self.object_code[address]
-        operand8 = self.object_code[(address + 1) % 65536]
-        hi = self.object_code[(address + 2) % 65536]
+        opcode = self.memory_map.Execute(address)
+        operand8 = self.memory_map.Execute((address + 1) % 65536)
+        hi = self.memory_map.Execute((address + 2) % 65536)
         operand16 = operand8 + ((hi << 8) & 0xff00)
 
         if (opcode >= 0) and (opcode < 256):
@@ -573,27 +573,27 @@ class sim6502(object):
             self.cc = self.cc & 0x7f
 
     def push(self, value):
-        self.object_code[self.pc] = value
+        self.memory_map.Write(self.pc, value)
         self.pc -= 1
 
     def pushaddr(self, addr):
         low = addr & 0xff
         high = ((addr & 0xff00) >> 8) & 0xff
-        self.object_code[self.pc] = high
+        self.memory_map.Write(self.pc, high)
         self.pc -= 1
-        self.object_code[self.pc] = low
+        self.memory_map.Write(self.pc, low)
         self.pc -= 1
 
     def pull(self):
         self.pc += 1
-        value = self.object_code[self.pc]
+        value = self.memory_map.Read(self.pc)
         return value
 
     def pulladdr(self):
         self.pc += 1
-        low = self.object_code[self.pc]
+        low = self.memory_map.Read(self.pc)
         self.pc += 1
-        high = self.object_code[self.pc]
+        high = self.memory_map.Read(self.pc)
 
         addr = low + (high << 8)
         return addr
@@ -702,7 +702,7 @@ class sim6502(object):
             else:
                 self.cc = self.cc | 0xfe
 
-            self.object_code[addr] = result
+            self.memory_map.Write(addr, result)
             self.pc += length
             return ("w", addr)
 
@@ -800,8 +800,8 @@ class sim6502(object):
     def instr_brk(self, addrmode, opcode, operand8, operand16):
         self.pushaddr(self.pc + 3)
         self.push(self.cc)
-        low = self.object_code[0xfffe]
-        high = self.object_code[0xffff]
+        low = self.memory_map.Read(0xfffe)
+        high = self.memory_map.Read(0xffff)
         self.pc = low + (high << 8)
         self.set_b(True)
         return None
@@ -911,7 +911,7 @@ class sim6502(object):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         result = (operand - 1) % 256
         self.make_flags_nz(result)
-        self.object_code[addr] = result
+        self.memory_map.Write(addr, result)
         self.pc += length
         return ("w", addr)
 
@@ -979,7 +979,7 @@ class sim6502(object):
         result = (operand + 1) % 256
         self.make_flags_nz(result)
         self.pc += length
-        self.object_code[addr] = result
+        self.memory_map.Write(addr, result)
         return None
 
     # Instruction INX
@@ -1083,7 +1083,7 @@ class sim6502(object):
             result = (operand >> 1) & 0xff
             self.pc += length
             self.make_flags_nz(result)
-            self.object_code[addr] = result
+            self.memory_map.Write(addr, result)
             return ("w", addr)
 
     # Instruction NOP
@@ -1120,50 +1120,50 @@ class sim6502(object):
     # FA       plx           
     # 7A       ply
     def instr_php(self, addrmode, opcode, operand8, operand16):
-        self.object_code[0x100 + self.sp] = self.cc
+        self.memory_map.Write(0x100 + self.sp, self.cc)
         self.sp = (self.sp - 1) % 256
         self.pc += 1
         return ("stack", self.sp)
 
     def instr_pha(self, addrmode, opcode, operand8, operand16):
-        self.object_code[0x100 + self.sp] = self.a
+        self.memory_map.Write(0x100 + self.sp,  self.a)
         self.sp = (self.sp - 1) % 256
         self.pc += 1
         return ("stack", self.sp)
 
     def instr_phx(self, addrmode, opcode, operand8, operand16):
-        self.object_code[0x100 + self.sp] = self.x
+        self.memory_map.Write(0x100 + self.sp, self.x)
         self.sp = (self.sp - 1) % 256
         self.pc += 1
         return ("stack", self.sp)
 
     def instr_phy(self, addrmode, opcode, operand8, operand16):
-        self.object_code[0x100 + self.sp] = self.y
+        self.memory_map.Write(0x100 + self.sp,  self.y)
         self.sp = (self.sp - 1) % 256
         self.pc += 1
         return ("stack", self.sp)
 
     def instr_plp(self, addrmode, opcode, operand8, operand16):
         self.sp = (self.sp + 1) % 256
-        self.cc = self.object_code[0x100 + self.sp]
+        self.cc = self.memory_map.Read(0x100 + self.sp)
         self.pc += 1
         return ("stack", self.sp)
 
     def instr_pla(self, addrmode, opcode, operand8, operand16):
         self.sp = (self.sp + 1) % 256
-        self.a = self.object_code[0x100 + self.sp]
+        self.a = self.memory_map.Read(0x100 + self.sp)
         self.pc += 1
         return ("stack", self.sp)
 
     def instr_plx(self, addrmode, opcode, operand8, operand16):
         self.sp = (self.sp + 1) % 256
-        self.x = self.object_code[0x100 + self.sp]
+        self.x = self.memory_map.Read(0x100 + self.sp)
         self.pc += 1
         return ("stack", self.sp)
 
     def instr_ply(self, addrmode, opcode, operand8, operand16):
         self.sp = (self.sp + 1) % 256
-        self.y = self.object_code[0x100 + self.sp]
+        self.y = self.memory_map.Read(0x100 + self.sp)
         self.pc += 1
         return ("stack", self.sp)
 
@@ -1203,7 +1203,7 @@ class sim6502(object):
 
             result = ((operand << 1) & 0xff) | carryin
             self.set_c(carryout)
-            self.object_code[addr] = result
+            self.memory_map.Write(addr, result)
             self.pc += length
             self.make_flags_nz(result)
             return ("w", addr)
@@ -1242,7 +1242,7 @@ class sim6502(object):
             else:
                 carryout = False
             result = ((operand >> 1) % 256) | carry
-            self.object_code[addr] = result
+            self.memory_map.Write(addr, result)
             self.set_c(carryout)
             self.pc += length
             self.make_flags_nz(result)
@@ -1335,7 +1335,7 @@ class sim6502(object):
     # 92 20    sta ($20)
     def instr_sta(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
-        self.object_code[addr] = self.a
+        self.memory_map.Write(addr, self.a)
         self.pc += length
         return ("w", addr)
 
@@ -1345,7 +1345,7 @@ class sim6502(object):
     # 8E 33 22 stx $2233
     def instr_stx(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
-        self.object_code[addr] = self.x
+        self.memory_map.Write(addr, self.x)
         self.pc += length
         return ("w", addr)
 
@@ -1355,7 +1355,7 @@ class sim6502(object):
     # 8C 33 22 sty $2233 
     def instr_sty(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
-        self.object_code[addr] = self.y
+        self.memory_map.Write(addr, self.y)
         self.pc += length
         return ("w", addr)
 
@@ -1366,7 +1366,7 @@ class sim6502(object):
     # 9E 33 22 stz $2233,X 
     def instr_stz(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
-        self.object_code[addr] = 0x00
+        self.memory_map.Write(addr, 0x00)
         self.pc += length
         return ("w", addr)
 
@@ -1392,7 +1392,7 @@ class sim6502(object):
     def instr_trb(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         result = operand & (self.a ^ 0xff)
-        self.object_code[addr] = result
+        self.memory_map.Write(addr, result)
         self.set_z((operand & self.a) == 0x00)
         self.pc += length
         return ("w", addr)
@@ -1400,7 +1400,7 @@ class sim6502(object):
     def instr_tsb(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         result = operand + self.a
-        self.object_code[addr] = result
+        self.memory_map.Write(addr, result)
         self.set_z((operand & self.a) == 0x00)
         self.pc += length
         return ("w", addr)
