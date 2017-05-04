@@ -12,7 +12,7 @@ class sim6502(object):
         self.sp = 0x0100
         self.cc = 0x00
         
-        self.memory_map = memory_map.MemoryMap()
+        self.memory_map = memory_map.MemoryMap(self)
         self.memory_map.InitializeMemory(address, object_code)
 
         self.build_opcode_table()
