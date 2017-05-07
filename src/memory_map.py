@@ -38,16 +38,20 @@ class MemoryMap(object):
         else:
             self.default_interceptor = default_interceptor
 
-    def TrapInterceptor(self, address, access_mode):
+    def TrapInterceptor(self, address, access_mode, _):
         if self._memory_map[address] == -1 and (access_mode == MODE_READ or access_mode == MODE_EXECUTE):
 
+            print self.cpu.show_state()
             print self.Dump(self.cpu.pc, 0x3)
             raise TrapException(address, access_mode)
 
-    def InitializeMemory(self, address, data):
-        self._memory_map[address:address+len(data)] = data
-
-        print self.Dump()
+    def InitializeMemory(self, address, data, interceptor=None):
+        for idx, value in enumerate(data):
+            if value < 0 or value > 255:
+                raise ValueError
+            self._memory_map[address + idx] = value
+            if interceptor:
+                self.Intercept(address + idx, interceptor)
 
     def Intercept(self, address, interceptor):
         """Register interceptor for access to a memory address"""
@@ -80,7 +84,11 @@ class MemoryMap(object):
 
         # May raise TrapException
         if interceptor:
-            interceptor(address, access_mode)
+            if access_mode == MODE_WRITE:
+                value = self._memory_map[address]
+            else:
+                value = None
+            interceptor(address, access_mode, value)
 
     # TODO: record access trace records
 
@@ -89,8 +97,8 @@ class MemoryMap(object):
         return self._memory_map[address]
 
     def Write(self, address, value, trace=True):
-        self._MaybeIntercept(address, MODE_WRITE)
         self._memory_map[address] = value
+        self._MaybeIntercept(address, MODE_WRITE)
 
     def Execute(self, address, trace=True):
         self._MaybeIntercept(address, MODE_EXECUTE)
