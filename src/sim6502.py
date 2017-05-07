@@ -1,19 +1,31 @@
 import memory_map
 
+class Flags(object):
+    # processor flags
+    NEGATIVE = 128
+    OVERFLOW = 64
+    UNUSED = 32
+    BREAK = 16
+    DECIMAL = 8
+    INTERRUPT = 4
+    ZERO = 2
+    CARRY = 1
+
 #
 # The 65C02 Simulator
 #
 class sim6502(object):
-    def __init__(self, object_code, address=0x0, symbols=None):
+    def __init__(self, object_code=None, address=0x0, symbols=None):
         self.pc = 0x0000
         self.a = 0x00
         self.x = 0x00
         self.y = 0x00
-        self.sp = 0x0100
+        self.sp = 0xff
         self.cc = 0x00
         
         self.memory_map = memory_map.MemoryMap(self)
-        self.memory_map.InitializeMemory(address, object_code)
+        if object_code:
+            self.memory_map.InitializeMemory(address, object_code)
 
         self.build_opcode_table()
 
@@ -307,7 +319,8 @@ class sim6502(object):
         self.a = 0x00
         self.x = 0x00
         self.y = 0x00
-        self.sp = 0x0100
+        self.sp = 0xff
+        self.cc = Flags.BREAK | Flags.UNUSED
         lowaddr = self.memory_map.Read(0xfffc)
         highaddr = self.memory_map.Read(0xfffd)
         if (lowaddr != None) and (lowaddr > -1) and (highaddr != None) and (highaddr > -1):
@@ -320,8 +333,8 @@ class sim6502(object):
 
     def nmi(self):
         # Read the NMI vector
-        lowaddr = self.memory_map.Read(0xfffe)
-        highaddr = self.memory_map.Read(0xffff)
+        lowaddr = self.memory_map.Read(0xfffa)
+        highaddr = self.memory_map.Read(0xfffb)
         if (lowaddr != None) and (lowaddr > -1) and (highaddr != None) and (highaddr > -1):
             address = (lowaddr & 0xff) | ((highaddr << 8) & 0xff00)
         else:
@@ -329,9 +342,10 @@ class sim6502(object):
 
         # push PC and status on stack
         self.memory_map.Write(self.sp, (self.pc >> 8) & 0xff)
-        self.memory_map.Write(self.sp + 1, self.pc & 0xff)
-        self.memory_map.Write(self.sp + 2, self.cc | 0x20)
-        self.sp += 3
+        self.memory_map.Write(self.sp - 1, self.pc & 0xff)
+        # TODO: does this actually set this flag before pushing to the stack?
+        self.memory_map.Write(self.sp - 2, self.cc | Flags.UNUSED)
+        self.sp -= 3
 
         # Set PC to the NMI vector
         self.pc = address
@@ -348,26 +362,17 @@ class sim6502(object):
 
         # push PC and status on stack
         self.memory_map.Write(self.sp, (self.pc >> 8) & 0xff)
-        self.memory_map.Write(self.sp + 1, self.pc & 0xff)
-        self.memory_map.Write(self.sp + 2, self.cc)
-        self.sp += 3
+        self.memory_map.Write(self.sp - 1, self.pc & 0xff)
+        self.memory_map.Write(self.sp - 2, self.cc)
+        self.sp -= 3
 
         # Set PC to the NMI vector
         self.pc = address
         return True
 
     def make_flags_nz(self, result):
-        # N Flag, bit 7
-        if result & 0x80 == 0x80:
-            self.cc = self.cc | 0x80
-        else:
-            self.cc = self.cc & 0x7f
-
-        # Z 
-        if result == 0x00:
-            self.cc = self.cc | 0x02
-        else:
-            self.cc = self.cc & 0xfd
+        self.set_n(result & 0x80)
+        self.set_z(result == 0)
 
     def make_flags_v(self, acc, operand, carryin, result, carryout):
         # V Flag, bit 6
@@ -377,13 +382,15 @@ class sim6502(object):
         # Get the operand based on the address mode
         # print get operand addrmode="+str(addrmode)+" opcode:"+str(opcode)+" op8:"+str(operand8)
         if addrmode == "zeropageindexedindirectx":
-            indirectaddr = operand8 + self.x
+            # 6502 bug/feature: indirecting by x wraps within the zero page
+            indirectaddr = (operand8 + self.x) & 0xff
             addr = (self.memory_map.Read(indirectaddr + 1) << 8) + self.memory_map.Read(indirectaddr)
             operand = self.memory_map.Read(addr)
             length = 2
         elif addrmode == "zeropageindexedindirecty":
             indirectaddr = operand8
-            addr = (self.memory_map.Read(indirectaddr + 1) << 8) + self.memory_map.Read(indirectaddr)
+            # 6502 bug when ($FF),y
+            addr = (self.memory_map.Read((indirectaddr + 1) & 0xff) << 8) + self.memory_map.Read(indirectaddr)
             addr = addr + self.y
             operand = self.memory_map.Read(addr)
             length = 2
@@ -397,11 +404,11 @@ class sim6502(object):
             operand = self.memory_map.Read(addr)
             length = 2
         elif addrmode == "zeropagex":
-            addr = operand8 + self.x
+            addr = (operand8 + self.x) & 0xff
             operand = self.memory_map.Read(addr)
             length = 2
         elif addrmode == "zeropagey":
-            addr = operand8 + self.y
+            addr = (operand8 + self.y) & 0xff
             operand = self.memory_map.Read(addr)
             length = 2
         elif addrmode == "immediate":
@@ -454,7 +461,9 @@ class sim6502(object):
             length = 3
         elif addrmode == "absoluteindirect":
             indirectaddr = operand16
-            addr = (self.memory_map.Read(indirectaddr + 1) << 8) + self.memory_map.Read(indirectaddr)
+            # 6502 bug: JMP to ($XXFF) reads the high byte from $XX00 not $X(X+1)00
+            addr = (self.memory_map.Read(
+                (indirectaddr & 0xff00) + (((indirectaddr & 0xff) + 1 ) & 0xff)) << 8) + self.memory_map.Read(indirectaddr)
             length = 3
         else:
             print "ERROR: Address mode %s not found for JMP or JSR" % addrmode
@@ -471,8 +480,13 @@ class sim6502(object):
     def execute(self, address=None):
         if address == None:
             address = self.pc
+            # Pre-increment PC on instruction fetch
+            self.pc += 1
         opcode = self.memory_map.Execute(address)
+        # TODO: we should increment self.pc here by the opcode argument length instead
+        # of doing it manually in every opcode handler and potentially introducing bugs
         # TODO: only fetch the number of operand bytes appropriate for the instruction
+        # to avoid the extra memory accesses
         operand8 = self.memory_map.Execute((address + 1) % 65536)
         hi = self.memory_map.Execute((address + 2) % 65536)
         operand16 = operand8 + ((hi << 8) & 0xff00)
@@ -489,10 +503,13 @@ class sim6502(object):
                     return (None, None)
                 return thing
             else:
+                # TODO: raise exception here
                 return ("not_instruction", self.pc)
         else:
+            # TODO: raise exception here
+            #print "ERROR: Out in the weeds. Opcode = %d" % opcode
             return ("weeds", self.pc)
-            # print "ERROR: Out in the weeds. Opcode = %d" % opcode
+
 
     def none_or_byte(self, thebyte):
         if thebyte == None:
@@ -527,86 +544,86 @@ class sim6502(object):
 
     def set_c(self, truth):
         if truth:
-            self.cc = self.cc | 0x01
+            self.cc = self.cc | Flags.CARRY
         else:
-            self.cc = self.cc & 0xfe
+            self.cc = self.cc & (0xff ^ Flags.CARRY)
 
     def set_z(self, truth):
         if truth:
-            self.cc = self.cc | 0x02
+            self.cc = self.cc | Flags.ZERO
         else:
-            self.cc = self.cc & 0xfd
+            self.cc = self.cc & (0xff ^ Flags.ZERO)
 
     def set_i(self, truth):
         if truth:
-            self.cc = self.cc | 0x04
+            self.cc = self.cc | Flags.INTERRUPT
         else:
-            self.cc = self.cc & 0xfb
+            self.cc = self.cc & (0xff ^ Flags.INTERRUPT)
 
     def set_d(self, truth):
         if truth:
-            self.cc = self.cc | 0x08
+            self.cc = self.cc | Flags.DECIMAL
         else:
-            self.cc = self.cc & 0xf7
+            self.cc = self.cc & (0xff ^ Flags.DECIMAL)
 
     def set_b(self, truth):
         if truth:
-            self.cc = self.cc | 0x10
+            self.cc = self.cc | Flags.BREAK
         else:
-            self.cc = self.cc & 0xef
+            self.cc = self.cc & (0xff ^ Flags.BREAK)
 
     def set_s(self, truth):
         if truth:
-            self.cc = self.cc | 0x20
+            self.cc = self.cc | Flags.UNUSED
         else:
-            self.cc = self.cc & 0xdf
+            self.cc = self.cc & (0xff ^ Flags.UNUSED)
 
     def set_v(self, truth):
         if truth:
-            self.cc = self.cc | 0x40
+            self.cc = self.cc | Flags.OVERFLOW
         else:
-            self.cc = self.cc & 0xbf
+            self.cc = self.cc & (0xff ^ Flags.OVERFLOW)
 
     def set_n(self, truth):
         if truth:
-            self.cc = self.cc | 0x80
+            self.cc = self.cc | Flags.NEGATIVE
         else:
-            self.cc = self.cc & 0x7f
+            self.cc = self.cc & (0xff ^ Flags.NEGATIVE)
 
     def push(self, value):
-        self.memory_map.Write(self.pc, value)
-        self.pc -= 1
+        self.memory_map.Write(0x100 + self.sp, value)
+        self.sp -= 1
 
     def pushaddr(self, addr):
         low = addr & 0xff
-        high = ((addr & 0xff00) >> 8) & 0xff
-        self.memory_map.Write(self.pc, high)
-        self.pc -= 1
-        self.memory_map.Write(self.pc, low)
-        self.pc -= 1
+        high = (addr & 0xff00) >> 8
+        self.memory_map.Write(0x100 + self.sp, high)
+        self.sp -= 1
+        self.memory_map.Write(0x100 + self.sp, low)
+        self.sp -= 1
 
     def pull(self):
-        self.pc += 1
-        value = self.memory_map.Read(self.pc)
+        self.sp += 1
+        value = self.memory_map.Read(0x100 + self.sp)
         return value
 
     def pulladdr(self):
-        self.pc += 1
-        low = self.memory_map.Read(self.pc)
-        self.pc += 1
-        high = self.memory_map.Read(self.pc)
+        self.sp += 1
+        low = self.memory_map.Read(0x100 + self.sp)
+        self.sp += 1
+        high = self.memory_map.Read(0x100 + self.sp)
 
         addr = low + (high << 8)
         return addr
 
     def relative_address(self, operand8, addr):
-        if operand8 & 0x80 == 0x80:
-            offset = ((operand8 & 0xff) ^ 0xff) + 1  # invert and +1 to change neg to pos
-            new_addr = 2 + (addr - offset)
+        if operand8 & 0x80:
+            offset = ((operand8 & 0xff) ^ 0xff) + 1 # invert and +1 to change neg to pos
+            new_addr = addr - offset
         else:
             offset = operand8
-            new_addr = 2 + (addr + offset)
-        return (new_addr)
+            new_addr = addr + offset
+        return new_addr
 
     # Instruction ADC
     # 69 55    adc #$55      
@@ -619,11 +636,9 @@ class sim6502(object):
     # 71 20    adc ($20),Y   
     # 72 20    adc ($20)
     def instr_adc(self, addrmode, opcode, operand8, operand16):
-        carryin = 0
-        if self.cc & 0x01 == 0x01:  # if carry set
-            carryin = 1
-        else:
-            carryin = 0
+        # TODO: support non-BCD arguments in DECIMAL mode
+
+        carryin = self.cc & Flags.CARRY
 
         # Get the operand based on the address mode
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
@@ -633,22 +648,30 @@ class sim6502(object):
         # Put the result in A
         # Compute the flags
 
-        result = (self.a + operand + carryin)
-        if result > 255:
-            carryout = 1
-            self.cc = self.cc | 0x01
-        else:
-            carryout = 0
-            self.cc = self.cc & 0xfe
+        if self.cc & Flags.DECIMAL:
+            a_10s = ((self.a & 0xf0) >> 4) * 10
+            a_1s = (self.a & 0xf)
+            operand_10s = ((operand & 0xf0) >> 4) * 10
+            operand_1s = (operand & 0xf)
+            if (a_10s >= 100 or a_1s >= 10 or operand_10s >= 100 or operand_1s >= 10):
+                raise ValueError("Invalid BCD argument not supported")
+            sum = (a_10s + a_1s + operand_10s + operand_1s + carryin)
+            self.set_c(sum > 100)
 
-        result = result % 256
+            sum_1s = sum % 10
+            sum_10s = (sum % 100 - sum_1s)/10
+            result = sum_10s << 4 + sum_1s
+        else:
+            result = (self.a + operand + carryin)
+            self.set_c(result > 255)
+            result = result % 256
 
         acc = self.a
         self.a = result
         self.make_flags_nz(result)
         # self.make_flags_v(self.a, operand, carryin, result, carryout)
         self.set_v(((acc ^ result) & (operand ^ result) & 0x80) == 0x80)
-        self.pc += length
+        self.pc += length - 1
         return None
 
     # Instruction AND
@@ -674,7 +697,7 @@ class sim6502(object):
 
         self.a = result
         self.make_flags_nz(result)
-        self.pc += length
+        self.pc += length - 1
 
         return None
 
@@ -686,54 +709,46 @@ class sim6502(object):
     # 1E 33 22 asl $2233,X   
     def instr_asl(self, addrmode, opcode, operand8, operand16):
         if addrmode == "accumulator":
-            result = self.a << 1
-            if (self.a & 0x80) == 0x80:
-                self.cc = self.cc | 0x1
-            else:
-                self.cc = self.cc | 0xfe
+            self.set_c(self.a & 0x80)
+            result = (self.a & 0x7f) << 1
             self.a = result
-            self.pc += 1
+            self.make_flags_nz(result)
             return None
         else:
             # Get the operand based on the address mode
             operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
-            result = operand << 1
-            if (operand & 0x80) == 0x80:
-                self.cc = self.cc | 0x1
-            else:
-                self.cc = self.cc | 0xfe
+            self.set_c(operand & 0x80)
+            result = (operand & 0x7f) << 1
 
             self.memory_map.Write(addr, result)
-            self.pc += length
+            self.pc += length - 1
+            self.make_flags_nz(result)
             return ("w", addr)
 
     # Instruction BCC
     # 90 55    bcc $55        
     def instr_bcc(self, addrmode, opcode, operand8, operand16):
-        if (self.cc & 0x01) == 0:
+        self.pc += 1
+        if not self.cc & Flags.CARRY:
             self.pc = self.relative_address(operand8, self.pc)
-        else:
-            self.pc += 2
 
         return None
 
     # Instruction BCS
     # B0 55    bcs $55       
     def instr_bcs(self, addrmode, opcode, operand8, operand16):
-        if (self.cc & 0x01) == 1:
+        self.pc += 1
+        if self.cc & Flags.CARRY:
             self.pc = self.relative_address(operand8, self.pc)
-        else:
-            self.pc += 2
 
         return None
 
     # Instruction BEQ
     # F0 55    beq $55     
     def instr_beq(self, addrmode, opcode, operand8, operand16):
-        if (self.cc & 0x02) == 0x2:
+        self.pc += 1
+        if self.cc & Flags.ZERO:
             self.pc = self.relative_address(operand8, self.pc)
-        else:
-            self.pc += 2
 
         return None
 
@@ -755,102 +770,100 @@ class sim6502(object):
         test = self.a & operand
         self.set_z(test == 0x00)
 
+        # N is set to bit 7 of the operand
+        self.set_n(operand & 0x80)
+
         # V is set to bit 6 of the operand
-        self.set_v(operand & 0x40 == 0x40)
-        self.pc += length
+        self.set_v(operand & 0x40)
+        self.pc += length - 1
 
         return None
 
     # Instruction BMI
     # 30 55    bmi $55
     def instr_bmi(self, addrmode, opcode, operand8, operand16):
-        if (self.cc & 0x80) == 0x80:
+        self.pc += 1
+        if self.cc & Flags.NEGATIVE:
             self.pc = self.relative_address(operand8, self.pc)
-        else:
-            self.pc += 2
 
         return None
 
     # Instruction BNE
     # D0 55    bne $55
     def instr_bne(self, addrmode, opcode, operand8, operand16):
-        if (self.cc & 0x02) == 0x00:
+        self.pc += 1
+        if not self.cc & Flags.ZERO:
             self.pc = self.relative_address(operand8, self.pc)
-        else:
-            self.pc += 2
 
         return None
 
     # Instruction BPL
-    # 10 55    bpl $55  
+    # 10 55    bpl $55
     def instr_bpl(self, addrmode, opcode, operand8, operand16):
-        if (self.cc & 0x80) == 0x00:
+        self.pc += 1
+        if not self.cc & Flags.NEGATIVE:
             self.pc = self.relative_address(operand8, self.pc)
-        else:
-            self.pc += 2
         return None
 
     # Instruction BRA
-    # 80 55    bra $55  
+    # 80 55    bra $55
     def instr_bra(self, addrmode, opcode, operand8, operand16):
+        self.pc += 1
         self.pc = self.relative_address(operand8, self.pc)
         return None
 
     # Instruction BRK
     # 00       brk  
     def instr_brk(self, addrmode, opcode, operand8, operand16):
-        self.pushaddr(self.pc + 3)
+        # PC is pre-incremented on instruction fetch
+        self.pushaddr(self.pc + 1)
+        self.set_s(True)
+        self.set_b(True)
         self.push(self.cc)
         low = self.memory_map.Read(0xfffe)
         high = self.memory_map.Read(0xffff)
         self.pc = low + (high << 8)
-        self.set_b(True)
+        self.set_i(True)
         return None
 
     # Instruction BVC
     # 50 55    bvc $55       
     def instr_bvc(self, addrmode, opcode, operand8, operand16):
-        if (self.cc & 0x40) == 0x00:
+        self.pc += 1
+        if not self.cc & Flags.OVERFLOW:
             self.pc = self.relative_address(operand8, self.pc)
-        else:
-            self.pc += 2
         return None
 
     # Instruction BVS
     # 70 55    bvs $55 
     def instr_bvs(self, addrmode, opcode, operand8, operand16):
-        if (self.cc & 0x40) == 0x040:
+        self.pc += 1
+        if self.cc & Flags.OVERFLOW:
             self.pc = self.relative_address(operand8, self.pc)
-        else:
-            self.pc += 2
         return None
 
     # Instruction CLC
     # 18        clc 
     def instr_clc(self, addrmode, opcode, operand8, operand16):
         self.set_c(False)
-        self.pc += 1
         return None
 
     # Instruction CLD
     # D8        cld 
     def instr_cld(self, addrmode, opcode, operand8, operand16):
         self.set_d(False)
-        self.pc += 1
         return None
 
     # Instruction CLI
     # 58        cli 
     def instr_cli(self, addrmode, opcode, operand8, operand16):
         self.set_i(False)
-        self.pc += 1
         return None
 
     # Instruction CLV
     # 57        clv 
     def instr_clv(self, addrmode, opcode, operand8, operand16):
         self.set_v(False)
-        self.pc += 1
         return None
 
     # Instruction CMP
@@ -866,7 +879,7 @@ class sim6502(object):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         test = (self.a - operand) % 256
         self.make_flags_nz(test)
-        self.pc += length
+        self.pc += length - 1
         return None
 
     # Instruction CMP
@@ -891,7 +904,7 @@ class sim6502(object):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         test = (self.y - operand) % 256
         self.make_flags_nz(test)
-        self.pc += length
+        self.pc += length - 1
         return None
 
     # Instruction DEA aka DEC A
@@ -900,7 +913,7 @@ class sim6502(object):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         test = (self.a - 1) % 256
         self.make_flags_nz(test)
-        self.pc += length
+        self.pc += length - 1
         return None
 
     # Instruction DEC
@@ -913,7 +926,7 @@ class sim6502(object):
         result = (operand - 1) % 256
         self.make_flags_nz(result)
         self.memory_map.Write(addr, result)
-        self.pc += length
+        self.pc += length - 1
         return ("w", addr)
 
     # Instruction DEX
@@ -923,7 +936,7 @@ class sim6502(object):
         result = (self.x - 1) % 256
         self.make_flags_nz(result)
         self.x = result
-        self.pc += length
+        self.pc += length - 1
         return None
 
     # Instruction DEY
@@ -933,7 +946,7 @@ class sim6502(object):
         result = (self.y - 1) % 256
         self.make_flags_nz(result)
         self.y = result
-        self.pc += length
+        self.pc += length - 1
         return None
 
     # Instruction EOR
@@ -958,7 +971,7 @@ class sim6502(object):
 
         self.a = result
         self.make_flags_nz(result)
-        self.pc += length
+        self.pc += length - 1
         return None
 
     # Instruction INA aka INC A
@@ -967,7 +980,7 @@ class sim6502(object):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         test = (self.a + 1) % 256
         self.make_flags_nz(test)
-        self.pc += length
+        self.pc += length - 1
         return None
 
     # Instruction INC
@@ -979,7 +992,7 @@ class sim6502(object):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         result = (operand + 1) % 256
         self.make_flags_nz(result)
-        self.pc += length
+        self.pc += length - 1
         self.memory_map.Write(addr, result)
         return None
 
@@ -990,7 +1003,7 @@ class sim6502(object):
         result = (self.x + 1) % 256
         self.make_flags_nz(result)
         self.x = result
-        self.pc += length
+        self.pc += length - 1
 
     # Instruction INY
     # C8       iny 
@@ -999,7 +1012,7 @@ class sim6502(object):
         result = (self.y + 1) % 256
         self.make_flags_nz(result)
         self.y = result
-        self.pc += length
+        self.pc += length - 1
         return None
 
     # Instruction JMP
@@ -1019,8 +1032,11 @@ class sim6502(object):
     # 20 33 22 jsr $2233
     def instr_jsr(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand16(addrmode, opcode, operand8, operand16)
-        self.pushaddr(self.pc + 3)
-        self.pc = operand
+        self.pc += length - 1
+        # Pushes the address - 1 of the next operation to be executed, so that when RTS is
+        # called and the next opcode pre-increments PC, it will be pointed at the right place.
+        self.pushaddr(self.pc - 1)
+        self.pc = addr
         return ("stack", self.sp)
 
         # Instruction LDA
@@ -1038,7 +1054,8 @@ class sim6502(object):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         # print "LDA : addrmode:"+str(addrmode)+" operand:"+str(operand)+" operand8 "+str(operand8)
         self.a = operand
-        self.pc += length
+        self.make_flags_nz(operand)
+        self.pc += length - 1
         return None
 
     # Instruction LDX
@@ -1051,7 +1068,8 @@ class sim6502(object):
     def instr_ldx(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         self.x = operand
-        self.pc += length
+        self.make_flags_nz(operand)
+        self.pc += length - 1
         return None
 
     # Instruction LDY
@@ -1063,7 +1081,8 @@ class sim6502(object):
     def instr_ldy(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         self.y = operand
-        self.pc += length
+        self.make_flags_nz(operand)
+        self.pc += length - 1
         return None
 
     # Instruction LSR
@@ -1074,15 +1093,18 @@ class sim6502(object):
     # 5E 33 22 lsr $2233,X
     def instr_lsr(self, addrmode, opcode, operand8, operand16):
         if (addrmode == "accumulator"):
+            self.set_c(self.a & 0x01)
+
             result = self.a >> 1
             self.a = result
-            self.pc += 1
             self.make_flags_nz(result)
             return None
         else:
             operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
+            self.set_c(operand & 0x01)
+
             result = (operand >> 1) & 0xff
-            self.pc += length
+            self.pc += length - 1
             self.make_flags_nz(result)
             self.memory_map.Write(addr, result)
             return ("w", addr)
@@ -1090,7 +1112,6 @@ class sim6502(object):
     # Instruction NOP
     # EA       nop
     def instr_nop(self, addrmode, opcode, operand8, operand16):
-        self.pc += 1
         return None
 
     # Instruction ORA
@@ -1108,7 +1129,7 @@ class sim6502(object):
         result = (operand | self.a)
         self.a = result
         self.make_flags_nz(result)
-        self.pc += length
+        self.pc += length - 1
         return None
 
     # Instruction PHA and other Pxx stack instructions
@@ -1122,50 +1143,54 @@ class sim6502(object):
     # 7A       ply
     def instr_php(self, addrmode, opcode, operand8, operand16):
         self.memory_map.Write(0x100 + self.sp, self.cc)
-        self.sp = (self.sp - 1) % 256
-        self.pc += 1
+        if self.sp:
+            self.sp = self.sp - 1
+        else:
+            self.sp = 0xff
         return ("stack", self.sp)
 
     def instr_pha(self, addrmode, opcode, operand8, operand16):
         self.memory_map.Write(0x100 + self.sp,  self.a)
-        self.sp = (self.sp - 1) % 256
-        self.pc += 1
+        if self.sp:
+            self.sp = self.sp - 1
+        else:
+            self.sp = 0xff
         return ("stack", self.sp)
 
     def instr_phx(self, addrmode, opcode, operand8, operand16):
         self.memory_map.Write(0x100 + self.sp, self.x)
-        self.sp = (self.sp - 1) % 256
-        self.pc += 1
+        if self.sp:
+            self.sp = self.sp - 1
+        else:
+            self.sp = 0xff
         return ("stack", self.sp)
 
     def instr_phy(self, addrmode, opcode, operand8, operand16):
         self.memory_map.Write(0x100 + self.sp,  self.y)
-        self.sp = (self.sp - 1) % 256
-        self.pc += 1
+        if self.sp:
+            self.sp = self.sp - 1
+        else:
+            self.sp = 0xff
         return ("stack", self.sp)
 
     def instr_plp(self, addrmode, opcode, operand8, operand16):
         self.sp = (self.sp + 1) % 256
         self.cc = self.memory_map.Read(0x100 + self.sp)
-        self.pc += 1
         return ("stack", self.sp)
 
     def instr_pla(self, addrmode, opcode, operand8, operand16):
         self.sp = (self.sp + 1) % 256
         self.a = self.memory_map.Read(0x100 + self.sp)
-        self.pc += 1
         return ("stack", self.sp)
 
     def instr_plx(self, addrmode, opcode, operand8, operand16):
         self.sp = (self.sp + 1) % 256
         self.x = self.memory_map.Read(0x100 + self.sp)
-        self.pc += 1
         return ("stack", self.sp)
 
     def instr_ply(self, addrmode, opcode, operand8, operand16):
         self.sp = (self.sp + 1) % 256
         self.y = self.memory_map.Read(0x100 + self.sp)
-        self.pc += 1
         return ("stack", self.sp)
 
     # Instruction ROL
@@ -1176,36 +1201,24 @@ class sim6502(object):
     # 3E 33 22 rol $2233,X
     def instr_rol(self, addrmode, opcode, operand8, operand16):
         if (addrmode == "accumulator"):
-            if ((self.a & 0x80) == 0x80):
-                carryout = True
-            else:
-                carryout = False
-            if ((self.cc & 0x01) == 0x01):
-                carryin = 0x01
-            else:
-                carryin = 0x01
+            carryout = self.a & 0x80
+            carryin = self.cc & Flags.CARRY
+
             result = ((self.a << 1) & 0xff) | carryin
             self.a = result
-            self.set_c(carryin)
-            self.pc += 1
+            self.set_c(carryout)
             self.make_flags_nz(result)
             return None
         else:
             operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
-            if ((operand & 0x80) == 0x80):
-                carryout = True
-            else:
-                carryout = False
 
-            if ((self.cc & 0x01) == 0x01):
-                carryin = 0x01
-            else:
-                carryin = 0x01
+            carryout = (operand & 0x80)
+            carryin = self.cc & Flags.CARRY
 
             result = ((operand << 1) & 0xff) | carryin
             self.set_c(carryout)
             self.memory_map.Write(addr, result)
-            self.pc += length
+            self.pc += length - 1
             self.make_flags_nz(result)
             return ("w", addr)
 
@@ -1217,35 +1230,29 @@ class sim6502(object):
     # 7E 33 22 ror $2233,X   
     def instr_ror(self, addrmode, opcode, operand8, operand16):
         if (addrmode == "accumulator"):
-            if ((self.cc & 0x01) == 0x01):
+            if self.cc & Flags.CARRY:
                 carry = 0x80
             else:
                 carry = 0
+            carryout = self.a & 0x01
 
-            if ((self.a & 0x01) == 0x01):
-                carryout = True
-            else:
-                carryout = False
             result = (self.a >> 1) | carry
             self.a = result
             self.set_c(carryout)
-            self.pc += 1
+            self.make_flags_nz(result)
             return None
         else:
             operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
-            if ((self.cc & 0x01) == 0x01):
+            if self.cc & Flags.CARRY:
                 carry = 0x80
             else:
                 carry = 0
+            carryout = operand & 0x01
 
-            if ((operand & 0x01) == 0x01):
-                carryout = True
-            else:
-                carryout = False
             result = ((operand >> 1) % 256) | carry
             self.memory_map.Write(addr, result)
             self.set_c(carryout)
-            self.pc += length
+            self.pc += length - 1
             self.make_flags_nz(result)
             return ("w", addr)
 
@@ -1255,13 +1262,14 @@ class sim6502(object):
     def instr_rti(self, addrmode, opcode, operand8, operand16):
         self.cc = self.pull()
         self.pc = self.pulladdr()
-        self.set_i(False)
+        self.set_b(True)
+        self.set_s(True)
         return ("stack", self.sp)
 
     # Instruction RTS
     # 60       rts
-    def instr_rti(self, addrmode, opcode, operand8, operand16):
-        self.pc = self.pulladdr()
+    def instr_rts(self, addrmode, opcode, operand8, operand16):
+        self.pc = (self.pulladdr() + 1) % 0x10000
         return ("stack", self.sp)
 
         # Instruction SBC
@@ -1276,10 +1284,8 @@ class sim6502(object):
     # F1 20    sbc ($20),Y   
     # F2 20    sbc ($20)
     def instr_sbc(self, addrmode, opcode, operand8, operand16):
-        if self.cc & 0x01 == 0x01:  # if carry set
-            carryin = 1
-        else:
-            carryin = 0
+        carryin = not (self.cc & Flags.CARRY)
+
         # Get the operand based on the address mode
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
 
@@ -1288,41 +1294,50 @@ class sim6502(object):
         # Put the result in A
         # Compute the flags
 
-        result = (self.a - operand - carryin)
-        if result < 0:
-            carryout = 1
-            self.cc = self.cc | 0x01
-        else:
-            carryout = 0
-            self.cc = self.cc & 0xfe
+        if self.cc & Flags.DECIMAL:
+            a_10s = ((self.a & 0xf0) >> 4) * 10
+            a_1s = (self.a & 0xf)
+            operand_10s = ((operand & 0xf0) >> 4) * 10
+            operand_1s = (operand & 0xf)
 
-        result = result % 256
+            if (a_10s >= 100 or a_1s >= 10 or operand_10s >= 100 or operand_1s >= 10):
+                raise ValueError("Invalid BCD argument not supported")
+            diff = (a_10s + a_1s - operand_10s - operand_1s - carryin)
+            carryout = diff < 0
+
+            diff_1s = diff % 10
+            diff_10s = (diff % 100 - diff_1s)/10
+
+            result = diff_10s * 16 + diff_1s
+        else:
+            result = (self.a - operand - carryin)
+            carryout = result < 0
+            result = result % 256
+
+        self.set_c(not carryout)
 
         self.a = result
         self.make_flags_nz(result)
         self.make_flags_v(self.a, operand, carryin, result, carryout)
-        self.pc += length
+        self.pc += length - 1
         return None
 
     # Instruction SEC    
     # 38       sec
     def instr_sec(self, addrmode, opcode, operand8, operand16):
         self.set_c(True)
-        self.pc += 1
         return None
 
     # Instruction SED    
     # F8       sed
     def instr_sed(self, addrmode, opcode, operand8, operand16):
         self.set_d(True)
-        self.pc += 1
         return None
 
     # Instruction SEI
     # 78       sei
     def instr_sei(self, addrmode, opcode, operand8, operand16):
         self.set_i(True)
-        self.pc += 1
         return None
 
     # Instruction STA
@@ -1337,7 +1352,7 @@ class sim6502(object):
     def instr_sta(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         self.memory_map.Write(addr, self.a)
-        self.pc += length
+        self.pc += length - 1
         return ("w", addr)
 
     # Instruction STX
@@ -1347,7 +1362,7 @@ class sim6502(object):
     def instr_stx(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         self.memory_map.Write(addr, self.x)
-        self.pc += length
+        self.pc += length - 1
         return ("w", addr)
 
     # Instruction STY
@@ -1357,7 +1372,7 @@ class sim6502(object):
     def instr_sty(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         self.memory_map.Write(addr, self.y)
-        self.pc += length
+        self.pc += length - 1
         return ("w", addr)
 
     # Instruction STZ
@@ -1368,21 +1383,21 @@ class sim6502(object):
     def instr_stz(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         self.memory_map.Write(addr, 0x00)
-        self.pc += length
+        self.pc += length - 1
         return ("w", addr)
 
     # Instruction TAX    
     # AA       tax
     def instr_tax(self, addrmode, opcode, operand8, operand16):
         self.x = self.a
-        self.pc += 1
+        self.make_flags_nz(self.a)
         return None
 
     # Instruction TAY
     # A8       tay
     def instr_tay(self, addrmode, opcode, operand8, operand16):
         self.y = self.a
-        self.pc += 1
+        self.make_flags_nz(self.a)
         return None
 
     # Instruction TRB
@@ -1395,7 +1410,7 @@ class sim6502(object):
         result = operand & (self.a ^ 0xff)
         self.memory_map.Write(addr, result)
         self.set_z((operand & self.a) == 0x00)
-        self.pc += length
+        self.pc += length - 1
         return ("w", addr)
 
     def instr_tsb(self, addrmode, opcode, operand8, operand16):
@@ -1403,30 +1418,29 @@ class sim6502(object):
         result = operand + self.a
         self.memory_map.Write(addr, result)
         self.set_z((operand & self.a) == 0x00)
-        self.pc += length
+        self.pc += length - 1
         return ("w", addr)
 
     # BA       tsx  
     def instr_tsx(self, addrmode, opcode, operand8, operand16):
         self.x = self.sp
-        self.pc += 1
+        self.make_flags_nz(self.sp)
         return None
 
         # 8A       txa
 
     def instr_txa(self, addrmode, opcode, operand8, operand16):
         self.a = self.x
-        self.pc += 1
+        self.make_flags_nz(self.x)
         return None
 
     # 9A       txs      
     def instr_txs(self, addrmode, opcode, operand8, operand16):
         self.sp = self.x
-        self.pc += 1
         return None
 
     # 98       tya
     def instr_tya(self, addrmode, opcode, operand8, operand16):
         self.a = self.y
-        self.pc += 1
+        self.make_flags_nz(self.y)
         return None
