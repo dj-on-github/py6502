@@ -11,6 +11,8 @@ class Flags(object):
     ZERO = 2
     CARRY = 1
 
+# TODO: check for other cases of % on negative numbers leading to negative underflow
+
 #
 # The 65C02 Simulator
 #
@@ -461,9 +463,7 @@ class sim6502(object):
             length = 3
         elif addrmode == "absoluteindirect":
             indirectaddr = operand16
-            # 6502 bug: JMP to ($XXFF) reads the high byte from $XX00 not $X(X+1)00
-            addr = (self.memory_map.Read(
-                (indirectaddr & 0xff00) + (((indirectaddr & 0xff) + 1 ) & 0xff)) << 8) + self.memory_map.Read(indirectaddr)
+            addr = (self.memory_map.Read(indirectaddr + 1) << 8) + self.memory_map.Read(indirectaddr)
             length = 3
         else:
             print "ERROR: Address mode %s not found for JMP or JSR" % addrmode
@@ -824,6 +824,8 @@ class sim6502(object):
         high = self.memory_map.Read(0xffff)
         self.pc = low + (high << 8)
         self.set_i(True)
+        # 65C02
+        self.set_d(False)
         return None
 
     # Instruction BVC
@@ -877,7 +879,10 @@ class sim6502(object):
     # D2 20    cmp ($20)     
     def instr_cmp(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
-        test = (self.a - operand) % 256
+        test = self.a - operand
+        # TODO: add test case
+        if test < 0:
+            test += 256
         self.make_flags_nz(test)
         self.pc += length - 1
         return None
@@ -891,7 +896,10 @@ class sim6502(object):
     # CC 33 22 cpy $2233 
     def instr_cpx(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
-        test = (self.a - operand) % 256
+        test = self.a - operand
+        # TODO: add test case
+        if test < 0:
+            test += 256
         self.make_flags_nz(test)
         self.pc += length
         return None
@@ -902,7 +910,10 @@ class sim6502(object):
     # CC 33 22 cpy $2233
     def instr_cpy(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
-        test = (self.y - operand) % 256
+        test = self.y - operand
+        # TODO: add test case
+        if test < 0:
+            test += 256
         self.make_flags_nz(test)
         self.pc += length - 1
         return None
@@ -911,8 +922,12 @@ class sim6502(object):
     # 3A       dea 
     def instr_dea(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
-        test = (self.a - 1) % 256
-        self.make_flags_nz(test)
+        # TODO: add test case
+        if self.a:
+            self.a -= 1
+        else:
+            self.a = 0xff
+        self.make_flags_nz(self.a)
         self.pc += length - 1
         return None
 
@@ -923,7 +938,11 @@ class sim6502(object):
     # DE 33 22 dec $2233,X 
     def instr_dec(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
-        result = (operand - 1) % 256
+        # TODO: add test case
+        if operand:
+            result = operand - 1
+        else:
+            result = 0xff
         self.make_flags_nz(result)
         self.memory_map.Write(addr, result)
         self.pc += length - 1
@@ -933,7 +952,11 @@ class sim6502(object):
     # CA       dex
     def instr_dex(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
-        result = (self.x - 1) % 256
+        # TODO: add test case
+        if self.x:
+            result = self.x - 1
+        else:
+            results = 0xff
         self.make_flags_nz(result)
         self.x = result
         self.pc += length - 1
@@ -943,7 +966,11 @@ class sim6502(object):
     # 88       dey 
     def instr_dey(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
-        result = (self.y - 1) % 256
+        # TODO: add test case
+        if self.y:
+            result = self.y - 1
+        else:
+            result = 0xff
         self.make_flags_nz(result)
         self.y = result
         self.pc += length - 1
@@ -978,8 +1005,8 @@ class sim6502(object):
     # 1A       ina
     def instr_ina(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
-        test = (self.a + 1) % 256
-        self.make_flags_nz(test)
+        self.a = (self.a + 1) % 256
+        self.make_flags_nz(self.a)
         self.pc += length - 1
         return None
 
@@ -1402,9 +1429,7 @@ class sim6502(object):
 
     # Instruction TRB
     # 14 20    trb $20       
-    # 1C 33 22 trb $2233     
-    # 04 20    tsb $20       
-    # 0C 33 22 tsb $2233
+    # 1C 33 22 trb $2233
     def instr_trb(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         result = operand & (self.a ^ 0xff)
@@ -1413,9 +1438,12 @@ class sim6502(object):
         self.pc += length - 1
         return ("w", addr)
 
+    # Instruction TSB
+    # 04 20    tsb $20
+    # 0C 33 22 tsb $2233
     def instr_tsb(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
-        result = operand + self.a
+        result = operand | self.a
         self.memory_map.Write(addr, result)
         self.set_z((operand & self.a) == 0x00)
         self.pc += length - 1
