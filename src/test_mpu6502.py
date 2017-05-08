@@ -35,7 +35,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import unittest
 import sys
-import sim6502
+import test_shim
 
 # TODO: tests for all the bugs here? http://forum.6502.org/viewtopic.php?t=770
 
@@ -44,100 +44,6 @@ import sim6502
 # - stack overflow
 # - $XX,Y wrapping in page 0
 # - irq/nmi behaviour
-
-class Shim6502(object):
-    """Shim between the API expected by py65's MPU class and sim6502 class"""
-
-    # processor flags
-    NEGATIVE = 0x80
-    OVERFLOW = 0x40
-    UNUSED = 0x20
-    BREAK = 0x10
-    DECIMAL = 0x8
-    INTERRUPT = 0x4
-    ZERO = 0x2
-    CARRY = 0x1
-
-    def __init__(self):
-        self.mpu = sim6502.sim6502()
-
-    def step(self):
-        self.mpu.execute()
-
-    def reset(self):
-        self.mpu.reset()
-
-    @property
-    def memory(self):
-        return self._memory
-
-    @memory.setter
-    def memory(self, value):
-        self.mpu.memory_map.InitializeMemory(0x0, value)
-        self._memory = MemoryShim(self.mpu.memory_map)
-
-    @property
-    def p(self):
-        return self.mpu.cc
-
-    @p.setter
-    def p(self, value):
-        self.mpu.cc = value
-
-    @property
-    def x(self):
-        return self.mpu.x
-
-    @x.setter
-    def x(self, value):
-        self.mpu.x = value
-
-    @property
-    def y(self):
-        return self.mpu.y
-
-    @y.setter
-    def y(self, value):
-        self.mpu.y = value
-
-    @property
-    def sp(self):
-        return self.mpu.sp
-
-    @sp.setter
-    def sp(self, value):
-        self.mpu.sp = value
-
-    @property
-    def a(self):
-        return self.mpu.a
-
-    @a.setter
-    def a(self, value):
-        self.mpu.a = value
-
-    @property
-    def pc(self):
-        return self.mpu.pc
-
-    @pc.setter
-    def pc(self, value):
-        self.mpu.pc = value
-
-
-class MemoryShim(object):
-    def __init__(self, memory_map):
-        self.memory_map = memory_map
-
-    def __getitem__(self, item):
-        return self.memory_map.Read(item)
-
-    def __setitem__(self, item, value):
-        # TODO: hack, bypasses tracing
-        return self.memory_map._memory_map.__setitem__(item, value)
-
-    def __len__(self):
-        return len(self.memory_map._memory_map)
 
 
 class Common6502Tests:
@@ -5820,25 +5726,27 @@ class MPUTests(unittest.TestCase, Common6502Tests):
 
     # BRK
 
-    def test_brk_preserves_decimal_flag_when_it_is_set(self):
-        mpu = self._make_mpu()
-        mpu.p = mpu.DECIMAL
-        # $C000 BRK
-        mpu.memory[0xC000] = 0x00
-        mpu.pc = 0xC000
-        mpu.step()
-        self.assertEqual(mpu.BREAK, mpu.p & mpu.BREAK)
-        self.assertEqual(mpu.DECIMAL, mpu.p & mpu.DECIMAL)
-
-    def test_brk_preserves_decimal_flag_when_it_is_clear(self):
-        mpu = self._make_mpu()
-        mpu.p = 0
-        # $C000 BRK
-        mpu.memory[0xC000] = 0x00
-        mpu.pc = 0xC000
-        mpu.step()
-        self.assertEqual(mpu.BREAK, mpu.p & mpu.BREAK)
-        self.assertEqual(0, mpu.p & mpu.DECIMAL)
+    # This bug is fixed in 65C02 which we are emulating
+    #
+    # def test_brk_preserves_decimal_flag_when_it_is_set(self):
+    #     mpu = self._make_mpu()
+    #     mpu.p = mpu.DECIMAL
+    #     # $C000 BRK
+    #     mpu.memory[0xC000] = 0x00
+    #     mpu.pc = 0xC000
+    #     mpu.step()
+    #     self.assertEqual(mpu.BREAK, mpu.p & mpu.BREAK)
+    #     self.assertEqual(mpu.DECIMAL, mpu.p & mpu.DECIMAL)
+    #
+    # def test_brk_preserves_decimal_flag_when_it_is_clear(self):
+    #     mpu = self._make_mpu()
+    #     mpu.p = 0
+    #     # $C000 BRK
+    #     mpu.memory[0xC000] = 0x00
+    #     mpu.pc = 0xC000
+    #     mpu.step()
+    #     self.assertEqual(mpu.BREAK, mpu.p & mpu.BREAK)
+    #     self.assertEqual(0, mpu.p & mpu.DECIMAL)
 
     # CMP Indirect, Indexed (X)
 
@@ -5966,14 +5874,16 @@ class MPUTests(unittest.TestCase, Common6502Tests):
 
     # JMP Indirect
 
-    def test_jmp_jumps_to_address_with_page_wrap_bug(self):
-        mpu = self._make_mpu()
-        mpu.memory[0x00ff] = 0
-        # $0000 JMP ($00)
-        self._write(mpu.memory, 0, (0x6c, 0xff, 0x00))
-        mpu.step()
-        self.assertEqual(0x6c00, mpu.pc)
-        #self.assertEqual(5, mpu.processorCycles)
+    # This bug is fixed on 65C02 which we are emulating
+    #
+    # def test_jmp_jumps_to_address_with_page_wrap_bug(self):
+    #     mpu = self._make_mpu()
+    #     mpu.memory[0x00ff] = 0
+    #     # $0000 JMP ($00)
+    #     self._write(mpu.memory, 0, (0x6c, 0xff, 0x00))
+    #     mpu.step()
+    #     self.assertEqual(0x6c00, mpu.pc)
+    #     #self.assertEqual(5, mpu.processorCycles)
 
     # ORA Indexed, Indirect (Y)
 
@@ -6015,8 +5925,7 @@ class MPUTests(unittest.TestCase, Common6502Tests):
         self.assertEqual(0x3f, mpu.a)
 
     def _get_target_class(self):
-        #return py65.devices.mpu6502.MPU
-        return Shim6502
+        return test_shim.Shim6502
 
 def test_suite():
     return unittest.findTestCases(sys.modules[__name__])
