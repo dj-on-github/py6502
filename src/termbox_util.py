@@ -3,6 +3,10 @@
 
 import termbox
 import inspect
+from inspect import currentframe, getframeinfo
+
+cf = currentframe()
+filename = getframeinfo(cf).filename
 
 import logging
 
@@ -224,7 +228,10 @@ class termbox_util():
                 self.tb.change_cell(x+i, y, ord(thestring[i]), self.bg,self.fg)
             else:
                 if (type(thestring) != str):
-                    logging.debug(str(thestring))
+                    cf = currentframe()
+                    lineno = cf.f_lineno
+                    fn = getframeinfo(cf).filename
+                    logging.debug(str("File: %s line: %d , Expecting sting, got %s" % (fn, lineno, thestring)))
                 self.tb.change_cell(x+i, y, ord(thestring[i]), self.fg,self.bg)
 
     def hline(self,x1,y1,x2):

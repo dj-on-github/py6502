@@ -279,7 +279,6 @@ def draw_goto_view(tb,tbtu,thetext):
     tbtu.addstr(1,1,"Goto Addr(hex):"+str(thetext))
     
 def dbg6502(object_code, symbol_table):
-    object_code = s.object_code
     
     memory_selected = True
     disassembly_selected = False
@@ -464,7 +463,7 @@ def dbg6502(object_code, symbol_table):
                 
             # When g is pressed, input a goto address
             elif type==termbox.EVENT_KEY and (ch=='G' or ch=='g'):
-                s.reset()
+                #s.reset()
                 
                 tbtu.draw_viewplane(vp_goto,10,10)
                 tb.present()
@@ -500,7 +499,7 @@ def dbg6502(object_code, symbol_table):
                     startline = addr / 8
                     startline -= 1
                     endline = startline+2
-                    vptu_action.addstr(1,2,("modified %04x=%02x    " % (addr,s.object_code[addr])).ljust(leftwidth-2))
+                    vptu_action.addstr(1,2,("modified %04x=%02x    " % (addr,object_code[addr])).ljust(leftwidth-2))
                     draw_memory_inner_view_partial(vptu_memory_inner,startline,endline,object_code)
                     vptu_memory_outer.present()
                 elif action == "stack":
