@@ -6,6 +6,10 @@ import sys
 import os
 import binascii
 import copy
+import logging
+logging.basicConfig(filename='py6502_debugger.log',level=logging.DEBUG)
+logging.info('Staring Py6502 Debugger')
+
 
 # The assembler, disassembler and simulator libraries
 from asm6502 import asm6502
@@ -50,7 +54,7 @@ def draw_commands_view(vptu):
     vptu.clear()
     vptu.border()
     vptu.addstr(x=4,y=0,thestring="COMMANDS",bold=False)
-    vptu.addstr(x=1, y=1, thestring="R: Reset, I: Irq, N:Nmi, S:Step, K:sKip, G: Goto Addr, o/l:page up/down", bold=False)
+    vptu.addstr(x=1, y=1, thestring="r: Reset, I: Irq, N:Nmi, s:Step, K:sKip, g: Goto Addr, o/l:page up/down", bold=False)
     vptu.addstr(x=1, y=2, thestring="ESC: exit B: set Breakpoint M:Modify Memory", bold=False)
 
 # 7	        6	        5	    4	    3	    2	        1	    0
@@ -202,9 +206,9 @@ def draw_disassembly_inner_view(vptu,object_code):
             thetype = "data"
             
         if thetype == "data":
-            line = "           %04x %02x       DW  $%02x" % (address,object_code[address],object_code[address])
+            line = "           %04x %02x       DB  $%02x" % (address,object_code[address],object_code[address])
         else:
-            line = dis.disassemble_line(address)
+            line,_ = dis.disassemble_line(address)
         linelist.insert(0,line)
         reversecount += 1
     vptu.addstr(2,2,"reversecount="+str(reversecount).ljust(17))    
@@ -237,7 +241,7 @@ def draw_disassembly_inner_view(vptu,object_code):
             thetype = "data"
             
         if thetype == "data":
-            line = "           %04x %02x       DW  $%02x" % (address,object_code[address],object_code[address])
+            line = "           %04x %02x       DB  $%02x" % (address,object_code[address],object_code[address])
         else:
             line, _ = dis.disassemble_line(address)
         linelist.append(line)
@@ -247,6 +251,8 @@ def draw_disassembly_inner_view(vptu,object_code):
      
     # Add the reverse list       
     for i in xrange(reversecount):
+        if type(linelist[i]) != str:
+            logging.debug(str(("linelist[%d] = " % i)+str(linelist[i])))
         vptu.addstr(x=0,y=i,thestring=linelist[i],bold=False)
         
     # Add the current instruction highlighted
@@ -602,7 +608,7 @@ symbol_table = copy.deepcopy(a.symbols)
 s = sim6502(object_code,symbols=symbol_table)
 
 # Disassembler Instance
-dis = dis6502(s.object_code,symbols=symbol_table)
+dis = dis6502(object_code,symbols=symbol_table)
 
 # start the debugger
 d = dbg6502(object_code,symbol_table)

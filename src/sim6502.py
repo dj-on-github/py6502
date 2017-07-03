@@ -24,7 +24,7 @@ class sim6502(object):
         self.y = 0x00
         self.sp = 0xff
         self.cc = 0x00
-        
+
         self.memory_map = memory_map.MemoryMap(self)
         if object_code:
             self.memory_map.InitializeMemory(address, object_code)

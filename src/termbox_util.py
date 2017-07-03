@@ -4,6 +4,8 @@
 import termbox
 import inspect
 
+import logging
+
 # Implements a virtual screen of arbitary size.
 # A rectangular view or views of a chosen size can be displayed on
 # the real view.
@@ -221,6 +223,8 @@ class termbox_util():
             if bold:
                 self.tb.change_cell(x+i, y, ord(thestring[i]), self.bg,self.fg)
             else:
+                if (type(thestring) != str):
+                    logging.debug(str(thestring))
                 self.tb.change_cell(x+i, y, ord(thestring[i]), self.fg,self.bg)
 
     def hline(self,x1,y1,x2):

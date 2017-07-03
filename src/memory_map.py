@@ -47,9 +47,12 @@ class MemoryMap(object):
 
     def InitializeMemory(self, address, data, interceptor=None):
         for idx, value in enumerate(data):
-            if value < 0 or value > 255:
-                raise ValueError
-            self._memory_map[address + idx] = value
+            # Bug: https://github.com/dj-on-github/py6502/issues/6
+            # Fix this by choosing to skip assigning data from object_code if it is untouched. 
+            #if value < 0 or value > 255:
+            #    raise ValueError
+            if (value >= 0 and value < 256):
+                self._memory_map[address + idx] = value
             if interceptor:
                 self.Intercept(address + idx, interceptor)
 
