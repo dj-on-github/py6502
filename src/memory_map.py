@@ -41,8 +41,8 @@ class MemoryMap(object):
     def TrapInterceptor(self, address, access_mode, _):
         if self._memory_map[address] == -1 and (access_mode == MODE_READ or access_mode == MODE_EXECUTE):
 
-            print self.cpu.show_state()
-            print self.Dump(self.cpu.pc, 0x3)
+            print(self.cpu.show_state())
+            print(self.Dump(self.cpu.pc, 0x3))
             raise TrapException(address, access_mode)
 
     def InitializeMemory(self, address, data, interceptor=None):

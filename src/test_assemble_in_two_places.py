@@ -7,20 +7,20 @@ lines[0] = ' ORG $2000'
 (listingtext2,symboltext2) = a.assemble(lines)
 
 for line in listingtext:
-    print line
-print
+    print(line)
+print()
 
 for line in symboltext:
-    print line
+    print(line)
 
-print
-print "Second assemble at $2000"
+print()
+print("Second assemble at $2000")
 for line in listingtext2:
-    print line
-print
+    print(line)
+print()
 
 for line in symboltext2:
-    print line
+    print(line)
 
 a.print_object_code()
 

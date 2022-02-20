@@ -416,7 +416,7 @@ class py6502_common(object):
 
         # Make another list for synonyms
         self.otherhexcodes = dict()
-        for hexval in xrange(256):
+        for hexval in range(256):
             self.otherhexcodes[hexval] = ("", "")
         self.otherhexcodes[0x1A] = ("inc", "accumulator")
         self.otherhexcodes[0x3A] = ("dec", "accumulator")
@@ -425,7 +425,7 @@ class py6502_common(object):
 
         # Make a dictionary to map opcode+address mode to the opcode value.
         self.hexmap = dict()
-        for hexval in xrange(256):
+        for hexval in range(256):
             op, mode = self.hexcodes[hexval]
             astring = op + mode
             if len(astring) > 1:
@@ -687,7 +687,7 @@ class py6502_common(object):
         self.address = 0x0000
 
         # Add the offset to each line by counting the opcodes and operands
-        for i in xrange(len(self.allstuff)):
+        for i in range(len(self.allstuff)):
             tuple = self.allstuff[i]
             (offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value,
              comment, extrabytes) = tuple
@@ -726,7 +726,7 @@ class py6502_common(object):
         # Go through filling in the unknown values from the symbol table
         self.debug(1, "Third Pass")
         self.listing = list()
-        for i in xrange(len(self.allstuff)):
+        for i in range(len(self.allstuff)):
             tuple = self.allstuff[i]
             (offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value,
              comment, extrabytes) = tuple
@@ -771,22 +771,22 @@ class py6502_common(object):
                     self.object_code[addr] = i
                     addr = addr + 1
 
-        print "LISTING"
+        print("LISTING")
         for i in self.listing:
-            print i
+            print(i)
 
-        print
-        print "SYMBOL TABLE"
+        print()
+        print("SYMBOL TABLE")
         for label in self.symbols:
             offset = self.symbols[label]
             astring = (("%s" % label).ljust(10)) + (" = " + "$%04X" % offset)
-            print astring
+            print(astring)
 
-        print
+        print()
         self.print_object_code()
 
     def print_object_code(self):
-        print "OBJECT CODE"
+        print("OBJECT CODE")
 
         # Insert a star when there are empty spots in the memory map
         i = 0
@@ -808,12 +808,12 @@ class py6502_common(object):
                             nextval = self.object_code[i]
                         else:
                             nextval = -1
-                    print astring
+                    print(astring)
                 else:
-                    print astring
+                    print(astring)
             else:
                 if (printed_a_star == 0):
-                    print "*"
+                    print("*")
                     printed_a_star = 1
                 i = i + 1
 
