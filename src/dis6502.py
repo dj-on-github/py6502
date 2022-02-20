@@ -9,7 +9,7 @@ class dis6502:
     def __init__(self, object_code, symbols=None):
 
         self.object_code = object_code
-        for i in xrange(len(self.object_code)):
+        for i in range(len(self.object_code)):
             if self.object_code[i] < 0:
                 self.object_code[i] = 0x00
 
@@ -20,7 +20,7 @@ class dis6502:
             self.have_symbols = True
 
             self.symbols = symbols
-            for label, offset in self.symbols.iteritems():
+            for label, offset in self.symbols.items():
                 self.labels[offset] = label
         self.build_opcode_table()
 
@@ -381,7 +381,7 @@ class dis6502:
             operandtext = ""
             length = 1
         else:
-            print "ERROR: Disassembler: Address mode %s not found" % addrmode
+            print("ERROR: Disassembler: Address mode %s not found" % addrmode)
             exit()
 
         if length == 1:

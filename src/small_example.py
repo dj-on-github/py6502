@@ -21,8 +21,8 @@ lines = thecode.splitlines()
 a = asm6502()
 (l,s) = a.assemble(lines)
 for line in l:
-    print line
-print
+    print(line)
+print()
 for line in s:
-    print line
+    print(line)
 

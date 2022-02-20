@@ -30,68 +30,68 @@ class viewplane(object):
     def __init__(self,width,height,fg=termbox.WHITE,bg=termbox.BLACK):
         self.iwidth = width
         self.iheight = height
-        
+
         self.mk_blanklines(fg=fg,bg=bg)
         #self.persistent_vp_list=list()
-            
+
     def width(self):
         return self.iwidth
-    
+
     def height(self):
         return self.iheight
-        
+
     def mk_blanklines(self,fg=termbox.WHITE,bg=termbox.BLACK):
         self.chars = list()
         self.fgs = list()
         self.bgs = list()
         self.fgline=list()
         self.bgline=list()
-        
+
         self.blankline = list()
         for c in range(self.iwidth):
             self.blankline.append(ord(u' '))
             self.fgline.append(fg)
             self.bgline.append(bg)
-            
+
         for c in range(self.iheight):
             self.chars.append(self.blankline[:])
             self.fgs.append(self.fgline[:])
             self.bgs.append(self.bgline[:])
-                    
+
     def getmaxxy(self):
         return (self.iwidth-1, self.iheight-1)
-                    
+
     def getmaxyx(self):
         return (self.iheight-1, self.iwidth-1)
-    
+
     def change_cell(self,x,y,ch,fg=termbox.WHITE,bg=termbox.BLACK):
         if (x > -1) and (x < self.iwidth) and (y > -1) and (y < self.iheight):
             self.chars[y][x]=ch
             self.bgs[y][x]=bg
             self.fgs[y][x]=fg
-    
+
     def clear(self,fg=termbox.WHITE,bg=termbox.BLACK):
         self.mk_blanklines(fg=fg,bg=bg)
-        
+
     def resize(self,width,height):
         if height < 1 or width < 1:
             return
-            
+
         if height < self.iheight:
             self.chars=self.chars[:height]
             self.fgs=self.fgs[:height]
             self.bgs=self.bgs[:height]
             self.iheight = height
-        
+
         if height > self.iheight:
             for i in range(height-self.iheight):
                 self.chars.append(self.blankline)
                 self.fgs.append(self.fgline)
                 self.bgs.append(self.bgline)
-                
+
             self.iheight = height
-        
-        # Trim off the ends if shrinking width.    
+
+        # Trim off the ends if shrinking width.
         if width < self.iwidth:
             self.fgline = self.fgline[:width]
             self.bgline = self.bgline[:width]
@@ -100,7 +100,7 @@ class viewplane(object):
                 self.fgs[i] = self.fgs[i][:width]
                 self.bgs[i] = self.bgs[i][:width]
             self.iwidth=width
-        
+
         # Add blanks to ends of lines if increasing width
         if width > self.width:
             # First increase the length of the blank lines
@@ -111,23 +111,23 @@ class viewplane(object):
                 self.blankline.append(ord(u' '))
                 self.fgline.append(fg)
                 self.bgline.append(bg)
-            
+
             # Then tack blanks on the ends.
             for i in range(self.iheight):
-                self.chars[i].join(self.blankline[self.iwidth:width])    
+                self.chars[i].join(self.blankline[self.iwidth:width])
                 self.fgs[i].join(self.fgline[self.iwidth:width])
                 self.bgs[i].join(self.bgline[self.iwidth:width])
-                
+
             self.iwidth = width
-            
+
     #def present(self):
     #    for pvp in self.persistent_vp_list:
     #        (vp,width,height,srcx,srcy,viewx,viewy,active) = pvp
     #        if active:
     #            self.draw_viewplane_window(vp,width,height,srcx,srcy,viewx,viewy)
-        
+
 # The utility functions that operate over a termbox or viewplane
-#             
+#
 class termbox_util():
     key_up   = 1
     key_down = 2
@@ -166,22 +166,22 @@ class termbox_util():
     TB_KEY_MOUSE_RELEASE    = (0xFFFF-25)
     TB_KEY_MOUSE_WHEEL_UP   = (0xFFFF-26)
     TB_KEY_MOUSE_WHEEL_DOWN = (0xFFFF-27)
-    
+
     def __init__(self,tb):
         self.tb = tb
         self.fg = termbox.WHITE
         self.bg = termbox.BLACK
         self.persistent_vp_list=list() # for self displaying viewplanes
-        
+
         #self.can_input = hasattr(tb, poll_event) and inspect.ismethod(getattr(tb, poll_event))
-    
+
     def getmaxyx(self):
         x = self.tb.width()-1
         y = self.tb.height()-1
         self.maxx = x
         self.maxy = y
         return((y,x))
-    
+
     def getmaxxy(self):
         x = self.tb.width()-1
         y = self.tb.height()-1
@@ -209,7 +209,7 @@ class termbox_util():
         # ignore attempts to place strings outside window boundary
         if y < 0 or y > maxy:
             return
-            
+
         if x+len(thestring) < 1:
             return
 
@@ -222,7 +222,7 @@ class termbox_util():
         if x < 0:
             thestring = thestring[-x:]
             x = 0
-            
+
         for i in range(len(thestring)):
             if bold:
                 self.tb.change_cell(x+i, y, ord(thestring[i]), self.bg,self.fg)
@@ -236,7 +236,7 @@ class termbox_util():
 
     def hline(self,x1,y1,x2):
         # draw a horizontal line from x1,y1 to x2,y1
-        
+
         #if self.outside(x1,y1):
         #    return
         #if self.outside(x2,y1):
@@ -249,7 +249,7 @@ class termbox_util():
 
     def vline(self,x1,y1,y2):
         # draw a vertical line from x1,y1 to x1,y2
-        
+
         #if self.outside(x1,y1):
         #    return
         #if self.outside(x1,y2):
@@ -259,7 +259,7 @@ class termbox_util():
             (y1,y2) = (y2,y1)
         for y in range(y1,y2+1):
             self.tb.change_cell(x1,y,ord(u'│'),self.fg, self.bg)
-           
+
     def fill_area(self,ch,x1=0,y1=0,x2='maxx',y2='maxy',fg='fg', bg='bg'):
         # draw a filled rectangle from x1,y1 to x2,y2
         (maxx,maxy)=self.getmaxxy()
@@ -271,27 +271,27 @@ class termbox_util():
             fg=self.fg
         if bg=='bg':
             bg=self.bg
-        
+
         ## Don't draw outside the screen
         #if self.outside(x1,y1):
         #    return
         #if self.outside(x2,y2):
         #    return
-        
+
         # Switch corners so x1,y1 is top right
         if x1 > x2:
             (x1,y1,x2,y2) = (x2,y1,x1,y2)
         if y1 > x2:
             (x1,y1,x2,y2) = (x1,y2,x2,y1)
-        
+
         width = 1+x2-x1
         height = 1+y2-y1
-        
+
         #FillArea(x, y, w, h)
         for y in range(height):
             for x in range(width):
                 self.tb.change_cell(x1+x, y1+y, ord(ch), fg, bg)
-        
+
     def box(self,x1=0,y1=0,x2='maxx',y2='maxy'):
         # draw a box from x1,y1 to x2,y2
         (maxx,maxy)=self.getmaxxy()
@@ -304,7 +304,7 @@ class termbox_util():
         #    return
         #if self.outside(x2,y2):
         #    return
-        
+
         # Switch corners so x1,y1 is top right
         if x1 > x2:
             (x1,y1,x2,y2) = (x2,y1,x1,y2)
@@ -320,19 +320,19 @@ class termbox_util():
         self.tb.change_cell(x2, y1, ord(u'┐'), self.fg, self.bg)  # top-right corner
         self.tb.change_cell(x1, y2, ord(u'└'), self.fg, self.bg)  #bottom-left corner
         self.tb.change_cell(x2, y2, ord(u'┘'), self.fg, self.bg)  # bottom-right corner
-        
+
     # Just draws a box around the full termbox
     # Avoids needing to put in the parameters to box.
     def border(self):
         #maxx,maxy = self.getmaxxy()
         self.box()
 
-    
+
     def draw_viewplane(self,vp,viewx,viewy):
         (width,height)=vp.getmaxxy()
         width=width+1
         height=height+1
-        
+
         for y in range(height):
             for x in range(width):
                 ch = vp.chars[y][x]
@@ -347,7 +347,7 @@ class termbox_util():
             return
         if height+srcy > vp.height():
             return
-        
+
         for line in range(height):
             for i in range(width):
                 ch = vp.chars[line+srcy][i+srcx]
@@ -363,12 +363,12 @@ class termbox_util():
     # viewplanes and activate and deactivate them as needed.
     # The add_ method returns a pvid (persistent viewplane id) so it can be
     # referenced later.
-    
+
     def add_persistent_viewplane(self,vp,viewx,viewy,active=True):
         (width,height)=vp.getmaxxy()
         width=width+1
         height=height+1
-        
+
         pid = len(self.persistent_vp_list)
         self.persistent_vp_list.append((vp,width,height,0,0,viewx,viewy,active))
         return pid
@@ -381,15 +381,15 @@ class termbox_util():
             return None
         if height+srcy > vp.height():
             return None
-        
+
         pid = len(self.persistent_vp_list)
         self.persistent_vp_list.append((vp,width,height,srcx,srcy,viewx,viewy, active))
         return pid
-    
+
     def move_persistent_viewplane_window(self,pid,new_srcx,new_srcy):
         (vp,width,height,srcx,srcy,viewx,viewy, active) = self.persistent_vp_list[pid]
         self.persistent_vp_list[pid] = (vp,width,height,new_srcx,new_srcy,viewx,viewy,True)
-        
+
     def activate_persistent_vp(self,pid):
         (vp,width,height,srcx,srcy,viewx,viewy, active) = self.persistent_vp_list[pid]
         self.persistent_vp_list[pid] = (vp,width,height,srcx,srcy,viewx,viewy,True)
@@ -397,10 +397,10 @@ class termbox_util():
     def deactivate_persistent_vp(self,pid):
         (vp,width,height,srcx,srcy,viewx,viewy, active) = self.persistent_vp_list[pid]
         self.persistent_vp_list[pid] = (vp,width,height,srcx,srcy,viewx,viewy,False)
-    
+
     # Calls the underlaying present() but also draws any active persistent
     # viewplanes in the persistent_vp_list()
-                
+
     def present(self):
         for pvp in self.persistent_vp_list:
             (vp,width,height,srcx,srcy,viewx,viewy,active) = pvp
@@ -409,9 +409,9 @@ class termbox_util():
         present_method = getattr(self.tb, "present", None)
         if callable(present_method):
             self.tb.present()
-    
+
     # Asks the user to press a few keys, to build a dictionary of a key map
-                
+
     def keymapper(self):
         keymap = dict()
         eventmap = dict()
@@ -423,21 +423,21 @@ class termbox_util():
         self.clear()
         self.box()
         self.addstr(2,2,"Key Mapper")
-                
+
         for name in keys:
             self.addstr(2,4,"Press %s            " % name)
             self.tb.present()
             event = self.tb.poll_event()
             keymap[name] = event
             eventmap[event] = name
-                
+
         i = 0
         for akey in keymap:
             self.addstr(2,6+i,str(akey)+" = "+str(keymap[akey]))
             i = i+1
-                
+
         return (keymap,eventmap)
-            
+
 # Implements a line of text that can be edited.
 class termbox_editableline():
     def __init__(self,tbinst,tbutil, x,y, width):
@@ -447,7 +447,7 @@ class termbox_editableline():
         self.y = y
         self.width = width
         self.contents=""
-    
+
     # Highlights the edited textbox
     # Puts a cursor there
     # Takes in left-right for moving cursor
@@ -459,8 +459,8 @@ class termbox_editableline():
     #      Ascii codes for typed characters
     #      Specials like escape need to be handled by the validator
     #         E.G. return a 7 and mark that esc was pressed to the
-    #         program can know what to do next.  
-    #      
+    #         program can know what to do next.
+    #
     def edit(self,validator, contents="", max_width=None,presenter=None):
         original_contents=contents[:]
         blankstr = " "*self.width
@@ -478,7 +478,7 @@ class termbox_editableline():
         while True:
             # Erase what's there
             self.tbutil.addstr(self.x,self.y,blankstr,bold=True)
-            
+
             # Work out what to display
             # Taking into account where in the string the window starts
             if len(contents)==0:
@@ -515,8 +515,8 @@ class termbox_editableline():
                 #self.tbutil.addstr(self.x,self.y+27,displaystr[cpos]+"   ",bold=False)
                 #self.tbutil.addstr(self.x,self.y+28,displaystr[cpos+1:]+"   ",bold=True)
                 #self.tbutil.addstr(self.x,self.y+29,str(cpos)+"    ",bold=True)
-            
-            # More Diagnostic Output 
+
+            # More Diagnostic Output
             #self.tbutil.addstr(self.x,self.y+1,"  len(contents)="+str(len(contents))+" cursorpos="+str(cursorpos)+" windstrt="+str(windowstart)+"  ")
             #self.tbutil.addstr(self.x,self.y+24,"  contents  ="+contents+"   ")
             #self.tbutil.addstr(self.x,self.y+25,"  displaystr="+displaystr+"   ")
@@ -533,9 +533,9 @@ class termbox_editableline():
             if event != None:
                 c = validator(event,contents)
                 #
-                # Handle esc, return, delete, up, down, left, right and input characters. 
+                # Handle esc, return, delete, up, down, left, right and input characters.
                 #
-            
+
                 # Return Pressed
                 if c == 7:
                     return (contents)
@@ -570,7 +570,7 @@ class termbox_editableline():
                             contents = contents[:max_width]
                         #self.tbutil.addstr(self.x,self.y+2," ADD CHAR      ")
 
-            # Move window view 
+            # Move window view
             if (cursorpos >= self.width-1):
                 windowstart = cursorpos+1-self.width
             if (cursorpos < windowstart):
@@ -603,7 +603,7 @@ def hex_validator(e,contents):
         return(7)
     else:
         return(ch)
-        
+
 def decimal_validator(e,contents):
     (type, ch, key, mod, w, h, x, y ) = e
     if type==termbox.EVENT_KEY and key == termbox.KEY_ENTER:
