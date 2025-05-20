@@ -373,12 +373,12 @@ class sim6502(object):
         return True
 
     def make_flags_nz(self, result):
-        self.set_n(result & 0x80)
-        self.set_z(result == 0)
+        self.set_n(int(result) & 0x80)
+        self.set_z(int(result) == 0)
 
     def make_flags_v(self, acc, operand, carryin, result, carryout):
         # V Flag, bit 6
-        self.set_v(((acc ^ result) & (operand ^ result) & 0x80) == 0x80)
+        self.set_v(((int(acc) ^ int(result)) & (int(operand) ^ int(result)) & 0x80) == 0x80)
 
     def get_operand(self, addrmode, opcode, operand8, operand16):
         # Get the operand based on the address mode
@@ -443,8 +443,8 @@ class sim6502(object):
             operand = operand8
             length = 1
         else:
-            print "ERROR: Address mode %s not found" % addrmode
-            print "     : PC = 0x%04x" % self.pc
+            print("ERROR: Address mode %s not found" % addrmode)
+            print("     : PC = 0x%04x" % self.pc)
             exit()
         return (operand, addr, length)
 
@@ -466,8 +466,8 @@ class sim6502(object):
             addr = (self.memory_map.Read(indirectaddr + 1) << 8) + self.memory_map.Read(indirectaddr)
             length = 3
         else:
-            print "ERROR: Address mode %s not found for JMP or JSR" % addrmode
-            print "     : PC = 0x%04x" % self.pc
+            print("ERROR: Address mode %s not found for JMP or JSR" % addrmode)
+            print("     : PC = 0x%04x" % self.pc)
             exit()
         operand = self.memory_map.Read(addr)
         return (operand, addr, length)
@@ -528,10 +528,9 @@ class sim6502(object):
         if (self.have_symbols) and (self.pc in self.labels):
             label = self.labels[self.pc]
             label = label.ljust(10)
-            print label + " PC:" + str_pc + " A:" + str_a + " X:" + str_x + " Y:" + str_y + " SP:" + str_sp + " STATUS:" + str_cc
-
+            print(label + " PC:" + str_pc + " A:" + str_a + " X:" + str_x + " Y:" + str_y + " SP:" + str_sp + " STATUS:" + str_cc)
         else:
-            print "           PC:" + str_pc + " A:" + str_a + " X:" + str_x + " Y:" + str_y + " SP:" + str_sp + " STATUS:" + str_cc
+            print("           PC:" + str_pc + " A:" + str_a + " X:" + str_x + " Y:" + str_y + " SP:" + str_sp + " STATUS:" + str_cc)
 
     # Utility routines to change the flags
     # So you don't need to remember the bit positions
@@ -626,14 +625,14 @@ class sim6502(object):
         return new_addr
 
     # Instruction ADC
-    # 69 55    adc #$55      
-    # 65 20    adc $20       
-    # 75 20    adc $20,X     
-    # 6D 33 22 adc $2233     
-    # 7D 33 22 adc $2233,X   
-    # 79 33 22 adc $2233,Y   
-    # 61 20    adc ($20,X)   
-    # 71 20    adc ($20),Y   
+    # 69 55    adc #$55
+    # 65 20    adc $20
+    # 75 20    adc $20,X
+    # 6D 33 22 adc $2233
+    # 7D 33 22 adc $2233,X
+    # 79 33 22 adc $2233,Y
+    # 61 20    adc ($20,X)
+    # 71 20    adc ($20),Y
     # 72 20    adc ($20)
     def instr_adc(self, addrmode, opcode, operand8, operand16):
         # TODO: support non-BCD arguments in DECIMAL mode
@@ -660,7 +659,7 @@ class sim6502(object):
 
             sum_1s = sum % 10
             sum_10s = (sum % 100 - sum_1s)/10
-            result = sum_10s << 4 + sum_1s
+            result = int(sum_10s) << 4 + sum_1s
         else:
             result = (self.a + operand + carryin)
             self.set_c(result > 255)
@@ -675,15 +674,15 @@ class sim6502(object):
         return None
 
     # Instruction AND
-    # 29 55    and #$55      
-    # 25 20    and $20       
-    # 35 20    and $20,X     
-    # 2D 33 22 and $2233     
-    # 3D 33 22 and $2233,X   
-    # 39 33 22 and $2233,Y   
-    # 21 20    and ($20,X)   
-    # 31 20    and ($20),Y   
-    # 32 20    and ($20) 
+    # 29 55    and #$55
+    # 25 20    and $20
+    # 35 20    and $20,X
+    # 2D 33 22 and $2233
+    # 3D 33 22 and $2233,X
+    # 39 33 22 and $2233,Y
+    # 21 20    and ($20,X)
+    # 31 20    and ($20),Y
+    # 32 20    and ($20)
 
     def instr_and(self, addrmode, opcode, operand8, operand16):
         # Get the operand based on the address mode
@@ -702,11 +701,11 @@ class sim6502(object):
         return None
 
     # Instruction ASL
-    # 0A       asl A         
-    # 06 20    asl $20       
-    # 16 20    asl $20,X     
-    # 0E 33 22 asl $2233     
-    # 1E 33 22 asl $2233,X   
+    # 0A       asl A
+    # 06 20    asl $20
+    # 16 20    asl $20,X
+    # 0E 33 22 asl $2233
+    # 1E 33 22 asl $2233,X
     def instr_asl(self, addrmode, opcode, operand8, operand16):
         if addrmode == "accumulator":
             self.set_c(self.a & 0x80)
@@ -726,7 +725,7 @@ class sim6502(object):
             return ("w", addr)
 
     # Instruction BCC
-    # 90 55    bcc $55        
+    # 90 55    bcc $55
     def instr_bcc(self, addrmode, opcode, operand8, operand16):
         self.pc += 1
         if not self.cc & Flags.CARRY:
@@ -735,7 +734,7 @@ class sim6502(object):
         return None
 
     # Instruction BCS
-    # B0 55    bcs $55       
+    # B0 55    bcs $55
     def instr_bcs(self, addrmode, opcode, operand8, operand16):
         self.pc += 1
         if self.cc & Flags.CARRY:
@@ -744,7 +743,7 @@ class sim6502(object):
         return None
 
     # Instruction BEQ
-    # F0 55    beq $55     
+    # F0 55    beq $55
     def instr_beq(self, addrmode, opcode, operand8, operand16):
         self.pc += 1
         if self.cc & Flags.ZERO:
@@ -753,11 +752,11 @@ class sim6502(object):
         return None
 
     # Instruction BIT
-    # 89 55    bit #$55      
-    # 24 20    bit $20       
-    # 34 20    bit $20,X     
-    # 2C 33 22 bit $2233     
-    # 3C 33 22 bit $2233,X   
+    # 89 55    bit #$55
+    # 24 20    bit $20
+    # 34 20    bit $20,X
+    # 2C 33 22 bit $2233
+    # 3C 33 22 bit $2233,X
     def instr_bit(self, addrmode, opcode, operand8, operand16):
         # Get the operand, immediate or from memory
         if addrmode == "immediate":
@@ -813,7 +812,7 @@ class sim6502(object):
         return None
 
     # Instruction BRK
-    # 00       brk  
+    # 00       brk
     def instr_brk(self, addrmode, opcode, operand8, operand16):
         # PC is pre-incremented on instruction fetch
         self.pushaddr(self.pc + 1)
@@ -829,7 +828,7 @@ class sim6502(object):
         return None
 
     # Instruction BVC
-    # 50 55    bvc $55       
+    # 50 55    bvc $55
     def instr_bvc(self, addrmode, opcode, operand8, operand16):
         self.pc += 1
         if not self.cc & Flags.OVERFLOW:
@@ -837,7 +836,7 @@ class sim6502(object):
         return None
 
     # Instruction BVS
-    # 70 55    bvs $55 
+    # 70 55    bvs $55
     def instr_bvs(self, addrmode, opcode, operand8, operand16):
         self.pc += 1
         if self.cc & Flags.OVERFLOW:
@@ -845,38 +844,38 @@ class sim6502(object):
         return None
 
     # Instruction CLC
-    # 18        clc 
+    # 18        clc
     def instr_clc(self, addrmode, opcode, operand8, operand16):
         self.set_c(False)
         return None
 
     # Instruction CLD
-    # D8        cld 
+    # D8        cld
     def instr_cld(self, addrmode, opcode, operand8, operand16):
         self.set_d(False)
         return None
 
     # Instruction CLI
-    # 58        cli 
+    # 58        cli
     def instr_cli(self, addrmode, opcode, operand8, operand16):
         self.set_i(False)
         return None
 
     # Instruction CLV
-    # 57        clv 
+    # 57        clv
     def instr_clv(self, addrmode, opcode, operand8, operand16):
         self.set_v(False)
         return None
 
     # Instruction CMP
-    # C9 55    cmp #$55      
-    # C5 20    cmp $20       
-    # CD 33 22 cmp $2233     
-    # DD 33 22 cmp $2233,X   
-    # D9 33 22 cmp $2233,Y   
-    # C1 20    cmp ($20,X)   
-    # D1 20    cmp ($20),Y   
-    # D2 20    cmp ($20)     
+    # C9 55    cmp #$55
+    # C5 20    cmp $20
+    # CD 33 22 cmp $2233
+    # DD 33 22 cmp $2233,X
+    # D9 33 22 cmp $2233,Y
+    # C1 20    cmp ($20,X)
+    # D1 20    cmp ($20),Y
+    # D2 20    cmp ($20)
     def instr_cmp(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         test = self.a - operand
@@ -888,12 +887,12 @@ class sim6502(object):
         return None
 
     # Instruction CMP
-    # E0 55    cpx #$55      
-    # E4 20    cpx $20       
-    # EC 33 22 cpx $2233     
-    # C0 55    cpy #$55      
-    # C4 20    cpy $20       
-    # CC 33 22 cpy $2233 
+    # E0 55    cpx #$55
+    # E4 20    cpx $20
+    # EC 33 22 cpx $2233
+    # C0 55    cpy #$55
+    # C4 20    cpy $20
+    # CC 33 22 cpy $2233
     def instr_cpx(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         test = self.a - operand
@@ -905,8 +904,8 @@ class sim6502(object):
         return None
 
     # Instruction CPY
-    # C0 55    cpy #$55      
-    # C4 20    cpy $20       
+    # C0 55    cpy #$55
+    # C4 20    cpy $20
     # CC 33 22 cpy $2233
     def instr_cpy(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
@@ -919,7 +918,7 @@ class sim6502(object):
         return None
 
     # Instruction DEA aka DEC A
-    # 3A       dea 
+    # 3A       dea
     def instr_dea(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         # TODO: add test case
@@ -932,10 +931,10 @@ class sim6502(object):
         return None
 
     # Instruction DEC
-    # C6 20    dec $20       
-    # D6 20    dec $20,X     
-    # CE 33 22 dec $2233     
-    # DE 33 22 dec $2233,X 
+    # C6 20    dec $20
+    # D6 20    dec $20,X
+    # CE 33 22 dec $2233
+    # DE 33 22 dec $2233,X
     def instr_dec(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         # TODO: add test case
@@ -956,14 +955,14 @@ class sim6502(object):
         if self.x:
             result = self.x - 1
         else:
-            results = 0xff
+            result = 0xff
         self.make_flags_nz(result)
         self.x = result
         self.pc += length - 1
         return None
 
     # Instruction DEY
-    # 88       dey 
+    # 88       dey
     def instr_dey(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         # TODO: add test case
@@ -977,15 +976,15 @@ class sim6502(object):
         return None
 
     # Instruction EOR
-    # 49 55    eor #$55      
-    # 45 20    eor $20       
-    # 55 20    eor $20,X     
-    # 4D 33 22 eor $2233     
-    # 5D 33 22 eor $2233,X   
-    # 59 33 22 eor $2233,Y   
-    # 41 20    eor ($20,X)   
-    # 51 20    eor ($20),Y   
-    # 52 20    eor ($20)   
+    # 49 55    eor #$55
+    # 45 20    eor $20
+    # 55 20    eor $20,X
+    # 4D 33 22 eor $2233
+    # 5D 33 22 eor $2233,X
+    # 59 33 22 eor $2233,Y
+    # 41 20    eor ($20,X)
+    # 51 20    eor ($20),Y
+    # 52 20    eor ($20)
     def instr_eor(self, addrmode, opcode, operand8, operand16):
         # Get the operand based on the address mode
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
@@ -1011,9 +1010,9 @@ class sim6502(object):
         return None
 
     # Instruction INC
-    # E6 20    inc $20       
-    # F6 20    inc $20,X     
-    # EE 33 22 inc $2233     
+    # E6 20    inc $20
+    # F6 20    inc $20,X
+    # EE 33 22 inc $2233
     # FE 33 22 inc $2233,X
     def instr_inc(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
@@ -1033,7 +1032,7 @@ class sim6502(object):
         self.pc += length - 1
 
     # Instruction INY
-    # C8       iny 
+    # C8       iny
     def instr_iny(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         result = (self.y + 1) % 256
@@ -1043,9 +1042,9 @@ class sim6502(object):
         return None
 
     # Instruction JMP
-    # 4C 33 22 jmp $2233     
-    # 6C 33 22 jmp ($2233)   
-    # 7C 33 22 jmp ($2233,X) 
+    # 4C 33 22 jmp $2233
+    # 6C 33 22 jmp ($2233)
+    # 7C 33 22 jmp ($2233,X)
     def instr_jmp(self, addrmode, opcode, operand8, operand16):
         # print "INSTR_JMP CALLED addrmode = %s opcode=%02x operand8=%02x operand16=%04x" % (addrmode,opcode,operand8,operand16)
         operand, addr, length = self.get_operand16(addrmode, opcode, operand8, operand16)
@@ -1069,14 +1068,14 @@ class sim6502(object):
         # Instruction LDA
 
     # A9 55    lda #$55
-    # A5 20    lda $20       
-    # B5 20    lda $20,X     
-    # AD 33 22 lda $2233     
-    # BD 33 22 lda $2233,X   
-    # B9 33 22 lda $2233,Y   
-    # A1 20    lda ($20,X)   
-    # B1 20    lda ($20),Y   
-    # B2 20    lda ($20)    
+    # A5 20    lda $20
+    # B5 20    lda $20,X
+    # AD 33 22 lda $2233
+    # BD 33 22 lda $2233,X
+    # B9 33 22 lda $2233,Y
+    # A1 20    lda ($20,X)
+    # B1 20    lda ($20),Y
+    # B2 20    lda ($20)
     def instr_lda(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         # print "LDA : addrmode:"+str(addrmode)+" operand:"+str(operand)+" operand8 "+str(operand8)
@@ -1086,12 +1085,12 @@ class sim6502(object):
         return None
 
     # Instruction LDX
-    # A9 55    lda #$55      
-    # A2 55    ldx #$55      
-    # A6 20    ldx $20       
-    # B6 20    ldx $20,Y     
-    # AE 33 22 ldx $2233     
-    # BE 33 22 ldx $2233,Y 
+    # A9 55    lda #$55
+    # A2 55    ldx #$55
+    # A6 20    ldx $20
+    # B6 20    ldx $20,Y
+    # AE 33 22 ldx $2233
+    # BE 33 22 ldx $2233,Y
     def instr_ldx(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         self.x = operand
@@ -1100,11 +1099,11 @@ class sim6502(object):
         return None
 
     # Instruction LDY
-    # A0 55    ldy #$55      
-    # A4 20    ldy $20       
-    # B4 20    ldy $20,X     
-    # AC 33 22 ldy $2233     
-    # BC 33 22 ldy $2233,X   
+    # A0 55    ldy #$55
+    # A4 20    ldy $20
+    # B4 20    ldy $20,X
+    # AC 33 22 ldy $2233
+    # BC 33 22 ldy $2233,X
     def instr_ldy(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         self.y = operand
@@ -1113,10 +1112,10 @@ class sim6502(object):
         return None
 
     # Instruction LSR
-    # 4A       lsr A         
-    # 46 20    lsr $20       
-    # 56 20    lsr $20,X     
-    # 4E 33 22 lsr $2233     
+    # 4A       lsr A
+    # 46 20    lsr $20
+    # 56 20    lsr $20,X
+    # 4E 33 22 lsr $2233
     # 5E 33 22 lsr $2233,X
     def instr_lsr(self, addrmode, opcode, operand8, operand16):
         if (addrmode == "accumulator"):
@@ -1142,14 +1141,14 @@ class sim6502(object):
         return None
 
     # Instruction ORA
-    # 09 55    ora #$55      
-    # 05 20    ora $20       
-    # 15 20    ora $20,X     
-    # 0D 33 22 ora $2233     
-    # 1D 33 22 ora $2233,X   
-    # 19 33 22 ora $2233,Y   
-    # 01 20    ora ($20,X)   
-    # 11 20    ora ($20),Y   
+    # 09 55    ora #$55
+    # 05 20    ora $20
+    # 15 20    ora $20,X
+    # 0D 33 22 ora $2233
+    # 1D 33 22 ora $2233,X
+    # 19 33 22 ora $2233,Y
+    # 01 20    ora ($20,X)
+    # 11 20    ora ($20),Y
     # 12 20    ora ($20)
     def instr_ora(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
@@ -1162,11 +1161,11 @@ class sim6502(object):
     # Instruction PHA and other Pxx stack instructions
     # 08       php
     # 28       plp
-    # 48       pha    
-    # DA       phx           
-    # 5A       phy           
-    # 68       pla           
-    # FA       plx           
+    # 48       pha
+    # DA       phx
+    # 5A       phy
+    # 68       pla
+    # FA       plx
     # 7A       ply
     def instr_php(self, addrmode, opcode, operand8, operand16):
         self.memory_map.Write(0x100 + self.sp, self.cc)
@@ -1221,10 +1220,10 @@ class sim6502(object):
         return ("stack", self.sp)
 
     # Instruction ROL
-    # 2A       rol A         
-    # 26 20    rol $20       
-    # 36 20    rol $20,X     
-    # 2E 33 22 rol $2233     
+    # 2A       rol A
+    # 26 20    rol $20
+    # 36 20    rol $20,X
+    # 2E 33 22 rol $2233
     # 3E 33 22 rol $2233,X
     def instr_rol(self, addrmode, opcode, operand8, operand16):
         if (addrmode == "accumulator"):
@@ -1250,11 +1249,11 @@ class sim6502(object):
             return ("w", addr)
 
     # Instruction ROR
-    # 6A       ror A         
-    # 66 20    ror $20       
-    # 76 20    ror $20,X     
-    # 6E 33 22 ror $2233     
-    # 7E 33 22 ror $2233,X   
+    # 6A       ror A
+    # 66 20    ror $20
+    # 76 20    ror $20,X
+    # 6E 33 22 ror $2233
+    # 7E 33 22 ror $2233,X
     def instr_ror(self, addrmode, opcode, operand8, operand16):
         if (addrmode == "accumulator"):
             if self.cc & Flags.CARRY:
@@ -1302,13 +1301,13 @@ class sim6502(object):
         # Instruction SBC
 
     # E9 55    sbc #$55
-    # E5 20    sbc $20       
-    # F5 20    sbc $20,X     
-    # ED 33 22 sbc $2233     
-    # FD 33 22 sbc $2233,X   
-    # F9 33 22 sbc $2233,Y   
-    # E1 20    sbc ($20,X)   
-    # F1 20    sbc ($20),Y   
+    # E5 20    sbc $20
+    # F5 20    sbc $20,X
+    # ED 33 22 sbc $2233
+    # FD 33 22 sbc $2233,X
+    # F9 33 22 sbc $2233,Y
+    # E1 20    sbc ($20,X)
+    # F1 20    sbc ($20),Y
     # F2 20    sbc ($20)
     def instr_sbc(self, addrmode, opcode, operand8, operand16):
         carryin = not (self.cc & Flags.CARRY)
@@ -1349,13 +1348,13 @@ class sim6502(object):
         self.pc += length - 1
         return None
 
-    # Instruction SEC    
+    # Instruction SEC
     # 38       sec
     def instr_sec(self, addrmode, opcode, operand8, operand16):
         self.set_c(True)
         return None
 
-    # Instruction SED    
+    # Instruction SED
     # F8       sed
     def instr_sed(self, addrmode, opcode, operand8, operand16):
         self.set_d(True)
@@ -1368,13 +1367,13 @@ class sim6502(object):
         return None
 
     # Instruction STA
-    # 85 20    sta $20       
-    # 95 20    sta $20,X     
-    # 8D 33 22 sta $2233     
-    # 9D 33 22 sta $2233,X   
-    # 99 33 22 sta $2233,Y   
-    # 81 20    sta ($20,X)   
-    # 91 20    sta ($20),Y   
+    # 85 20    sta $20
+    # 95 20    sta $20,X
+    # 8D 33 22 sta $2233
+    # 9D 33 22 sta $2233,X
+    # 99 33 22 sta $2233,Y
+    # 81 20    sta ($20,X)
+    # 91 20    sta ($20),Y
     # 92 20    sta ($20)
     def instr_sta(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
@@ -1383,8 +1382,8 @@ class sim6502(object):
         return ("w", addr)
 
     # Instruction STX
-    # 86 20    stx $20       
-    # 96 20    stx $20,Y     
+    # 86 20    stx $20
+    # 96 20    stx $20,Y
     # 8E 33 22 stx $2233
     def instr_stx(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
@@ -1393,9 +1392,9 @@ class sim6502(object):
         return ("w", addr)
 
     # Instruction STY
-    # 84 20    sty $20       
-    # 94 20    sty $20,X     
-    # 8C 33 22 sty $2233 
+    # 84 20    sty $20
+    # 94 20    sty $20,X
+    # 8C 33 22 sty $2233
     def instr_sty(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         self.memory_map.Write(addr, self.y)
@@ -1403,17 +1402,17 @@ class sim6502(object):
         return ("w", addr)
 
     # Instruction STZ
-    # 64 20    stz $20       
-    # 74 20    stz $20,X     
-    # 9C 33 22 stz $2233     
-    # 9E 33 22 stz $2233,X 
+    # 64 20    stz $20
+    # 74 20    stz $20,X
+    # 9C 33 22 stz $2233
+    # 9E 33 22 stz $2233,X
     def instr_stz(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
         self.memory_map.Write(addr, 0x00)
         self.pc += length - 1
         return ("w", addr)
 
-    # Instruction TAX    
+    # Instruction TAX
     # AA       tax
     def instr_tax(self, addrmode, opcode, operand8, operand16):
         self.x = self.a
@@ -1428,7 +1427,7 @@ class sim6502(object):
         return None
 
     # Instruction TRB
-    # 14 20    trb $20       
+    # 14 20    trb $20
     # 1C 33 22 trb $2233
     def instr_trb(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
@@ -1449,7 +1448,7 @@ class sim6502(object):
         self.pc += length - 1
         return ("w", addr)
 
-    # BA       tsx  
+    # BA       tsx
     def instr_tsx(self, addrmode, opcode, operand8, operand16):
         self.x = self.sp
         self.make_flags_nz(self.sp)
@@ -1462,7 +1461,7 @@ class sim6502(object):
         self.make_flags_nz(self.x)
         return None
 
-    # 9A       txs      
+    # 9A       txs
     def instr_txs(self, addrmode, opcode, operand8, operand16):
         self.sp = self.x
         return None

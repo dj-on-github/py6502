@@ -18,7 +18,7 @@ class asm6502():
         self.addressmodes = dict()
         self.addressmmodelist = list()
         self.object_code = list()  # 64 K entries to cover whole memory map
-        for i in xrange(0, 65536):
+        for i in range(0, 65536):
             self.object_code.append(-1)  # -1 indicate location not populated
 
         self.littleendian = True  # Use le and be directives to change this
@@ -59,8 +59,8 @@ class asm6502():
         self.debug(1, "INFO: Line %d :%s" % (linenumber, text))
 
     def warning(self, linenumber, linetext, text):
-        print "WARNING: Line %d :%s" % (linenumber, text)
-        print "  " + linetext
+        print("WARNING: Line %d :%s" % (linenumber, text))
+        print("  " + linetext)
 
     def strip_comments(self, thestring):
         self.debug(3, "string passed to strip_comments()=%s" % thestring)
@@ -74,7 +74,7 @@ class asm6502():
         if (level > self.debuglevel):
             pass
         else:
-            print "   DEBUG(%d):%s" % (level, astring)
+            print("   DEBUG(%d):%s" % (level, astring))
 
     # find a label at the front. Strip it and return the symbol
     def strip_label(self, thestring, linenumber):
@@ -423,7 +423,7 @@ class asm6502():
             if c == "$":
                 newstring = newstring + "0x"
             elif c == "@":
-                newstring = newstring + "0"
+                newstring = newstring + "0o"
             else:
                 newstring = newstring + c
         newstring = newstring + "]"
@@ -857,7 +857,7 @@ class asm6502():
         self.hexcodes[0xFF] = ("", "")
 
         self.otherhexcodes = dict()  # Make another list for synonyms
-        for hexval in xrange(256):
+        for hexval in range(256):
             self.otherhexcodes[hexval] = ("", "")
         self.otherhexcodes[0x1A] = ("inc", "accumulator")
         self.otherhexcodes[0x3A] = ("dec", "accumulator")
@@ -865,7 +865,7 @@ class asm6502():
         self.otherhexcodes[0xB0] = ("bge", "relative")
 
         self.hexmap = dict()
-        for hexval in xrange(256):
+        for hexval in range(256):
             op, mode = self.hexcodes[hexval]
             astring = op + mode
             if len(astring) > 1:
@@ -1131,7 +1131,7 @@ class asm6502():
         self.debug(2, str(self.allstuff[linenumber - 1]))
         self.debug(2, "-----------------------")
 
-    # Perform the three passes of the assembly    
+    # Perform the three passes of the assembly
     def assemble(self, lines):
         self.clear_state()
 
@@ -1148,7 +1148,7 @@ class asm6502():
         self.address = 0x0000
 
         # Add the offset to each line by counting the opcodes and operands
-        for i in xrange(len(self.allstuff)):
+        for i in range(len(self.allstuff)):
             tuple = self.allstuff[i]
             (offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value,
              comment, extrabytes, num_extrabytes, linetext) = tuple
@@ -1194,7 +1194,7 @@ class asm6502():
         # The opcode is entered in the location
         # non instruction locations are set to None.
 
-        for i in xrange(len(self.allstuff)):
+        for i in range(len(self.allstuff)):
             tuple = self.allstuff[i]
             (offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value,
              comment, extrabytes, num_extrabytes, linetext) = tuple
@@ -1217,7 +1217,7 @@ class asm6502():
                         newvalue = self.symbols[value]
                         highbyte = ((newvalue & 0xff00) >> 8) & 0x00ff
 
-            # populate the extrabytes lists                
+            # populate the extrabytes lists
             if (opcode == "db") and (operand != None) and (len(operand) > 0):
                 extrabytes = self.decode_extrabytes(linenumber, linetext, operand)
             elif (opcode == "dw") and (operand != None) and (len(operand) > 0):
@@ -1235,9 +1235,9 @@ class asm6502():
             self.listing.append(line)
 
             # Fill in the instruction map
-            # This makes it easy for an interactive disassembler to 
+            # This makes it easy for an interactive disassembler to
             # know what is instruction code and what is data.
-            # By signaling which are operand bytes, it's easy to 
+            # By signaling which are operand bytes, it's easy to
             # disassemble backwards from the current position
 
             #   None                    = Not an instruction or operand
@@ -1288,13 +1288,13 @@ class asm6502():
         #    offset = self.symbols[label]
         #    astring=(("%s" % label).ljust(10)) +(" = "+"$%04X" % offset)
         #    print astring
-        #    
+        #
         # print
         # self.print_object_code()
         return (listingtext, symboltext)
 
     def print_object_code(self):
-        print "OBJECT CODE"
+        print("OBJECT CODE")
 
         # Insert a star when there are empty spots in the memory map
         i = 0
@@ -1316,18 +1316,18 @@ class asm6502():
                             nextval = self.object_code[i]
                         else:
                             nextval = -1
-                    print astring
+                    print(astring)
                 else:
-                    print astring
+                    print(astring)
             else:
                 if (printed_a_star == 0):
-                    print "*"
+                    print("*")
                     printed_a_star = 1
                 i = i + 1
 
     def srecord_checksum(self, astring):
         checksum = 0
-        for i in xrange(len(astring) / 2):
+        for i in range(int(len(astring) / 2)):
             hexpair = "0x" + astring[(i * 2):(i * 2) + 2]
             bytevalue = eval(hexpair)
             checksum = checksum + bytevalue
@@ -1427,7 +1427,7 @@ class asm6502():
     def print_srecords(self, version, revision, module_name, comment):
         lines = self.srecords(version, revision, module_name, comment)
         for line in lines:
-            print line
+            print(line)
 
     def intelhex(self):
         # print "INTEL HEX FORMAT OUTPUT"
@@ -1481,7 +1481,7 @@ class asm6502():
     def print_intelhex(self):
         lines = self.intelhex()
         for line in lines:
-            print line
+            print(line)
 
     # returns entire 64K memory as hex in the form of 64 bytes per line.
     def hex(self, noaddress=False):
@@ -1489,7 +1489,7 @@ class asm6502():
         # print
         theoutput = list()
 
-        for i in xrange(1024):
+        for i in range(1024):
             addr = 64 * i
 
             # Prepend with an address field, or not if not desired
@@ -1498,8 +1498,8 @@ class asm6502():
             else:
                 line = "%04x:" % addr
 
-            # add the bytes as hex to the line    
-            for j in xrange(64):
+            # add the bytes as hex to the line
+            for j in range(64):
                 val = self.object_code[(i * 64) + j]
 
                 # Range check the bytes
@@ -1515,4 +1515,4 @@ class asm6502():
     def print_hex(self):
         lines = self.hex()
         for line in lines:
-            print line
+            print(line)
