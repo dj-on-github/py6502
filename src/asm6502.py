@@ -375,7 +375,7 @@ class asm6502():
             return None
 
     def decode_extrawords(self, linenumber, linetext, s):
-        csl = s.split(',')
+        csl = [x.strip() for x in s.split(',')]
         newlist = list()
         for theword in csl:
             if theword[0] == '&':
@@ -405,7 +405,6 @@ class asm6502():
 
     def decode_extrabytes(self, linenumber, linetext, s):
         newstring = "["
-
         for c in s:
             if c == "$":
                 newstring = newstring + "0x"
