@@ -1364,7 +1364,7 @@ class asm6502():
             comment_trimmed = comment
 
         text = "%02x%02x" % (version, revision)
-        text = text + self.str2asciibytes(module_name + comment)
+        text = text + self.str2asciibytes(modname_trimmed + comment_trimmed)
         addr = "0000"
         countedpart = addr + text
         length = "%02x" % (len(addr + text))
