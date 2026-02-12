@@ -312,7 +312,7 @@ class asm6502():
                     newlist.append(g)
                     newlist.append(h)
                 else:
-                    newlist.append(g)
+                    newlist.append(h)
                     newlist.append(g)
                     newlist.append(f)
                     newlist.append(e)
