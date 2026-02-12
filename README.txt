@@ -176,6 +176,14 @@ The default behaviour of the assemble() class method is set by variables that ha
 
 Setting clear_sym=False retains the symbol table from the previous call, and setting clear_lst=False allows multiple pieces of source code to be grouped together.
 
+Setting clear_sym=True also allows you to establish symbols prior to running the assembler, then reference them in the code:
+
+        from asm6502 import asm6502
+        a = asm6502()
+        lines = [' ORG $1000', ' NOP', ' LDA #$20', ' JMP syblue', 'here: NOP', ' RTS']
+        a.symbols['skyblue'] = 0x4500
+        a.assemble(lines, clear_sym=FALSE)
+
 Getting IntelHex format data out
 --------------------------------
 After assembling you can output the object code in intelhex format.
