@@ -3,25 +3,9 @@ import re
 
 class asm6502():
     def __init__(self, debug=0):
-        # print "65C02 Assembler"
+        # print("65C02 Assembler")
+        self.clear_state()
         self.debuglevel = debug
-        self.text_of_lines = list()  # of strings
-        self.lines = list()  # parsed lines (symbol, opcode, addrmode, value
-        self.symbols = list()  # of (name,line#) tuples
-
-        self.labeldict = dict()
-        self.labellist = list()
-
-        self.opcodelist = list()
-        self.opcodedict = dict()
-
-        self.addressmodes = dict()
-        self.addressmmodelist = list()
-        self.object_code = list()  # 64 K entries to cover whole memory map
-        for i in range(0, 65536):
-            self.object_code.append(-1)  # -1 indicate location not populated
-
-        self.littleendian = True  # Use le and be directives to change this
 
         self.genopcodelist()  # generate the tables
         self.build_opcode_map()
@@ -33,13 +17,16 @@ class asm6502():
         self.octal_digits = "01234567"
         self.letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
 
-        self.allstuff = list()
-        self.line = 1
-
-    def clear_state(self):
+    def clear_state(self, clear_lst=True, clear_sym=True, clear_obj=True):
         self.text_of_lines = list()  # of strings
-        self.lines = list()  # parsed lines (symbol, opcode, addrmode, value
-        self.symbols = list()  # of (name,line#) tuples
+        if clear_lst:
+            self.listing = list()  # parsed lines (symbol, opcode, addrmode, value
+        if clear_sym:
+            self.symbols = dict()  # of (name,line#)
+        if clear_obj:
+            self.object_code = list()  # 64 K entries to cover whole memory map
+            for i in range(0, 65536):
+                self.object_code.append(-1)  # -1 indicate location not populated
 
         self.labeldict = dict()
         self.labellist = list()
@@ -123,14 +110,14 @@ class asm6502():
             noremainder = True
 
         if noopcode:
-            # print "no opcode or remainder"
+            # print("no opcode or remainder")
             return (("", ""))
         else:
             if noremainder:
-                # print "opcode %s but no remainder" % opcodestr
+                # print("opcode %s but no remainder" % opcodestr)
                 return ((opcodestr, ""))
             else:
-                # print "opcode %s with remainder %s" % (opcodestr,remainderstr)
+                # print("opcode %s with remainder %s" % (opcodestr,remainderstr))
                 return ((opcodestr, remainderstr))
 
     def check_opcode(self, opcode_in, linenumber):
@@ -1131,9 +1118,10 @@ class asm6502():
         self.debug(2, str(self.allstuff[linenumber - 1]))
         self.debug(2, "-----------------------")
 
-    # Perform the three passes of the assembly
-    def assemble(self, lines):
-        self.clear_state()
+    # Perform the three passes of the assembly. Optionally retain stuff from
+    # previous assembly (if any)
+    def assemble(self, lines, clear_lst=True, clear_sym=True, clear_obj=False):
+        self.clear_state(clear_lst=clear_lst, clear_sym=clear_sym, clear_obj=clear_obj)
 
         # First pass, parse each line for label, opcode, operand and comments
         self.debug(1, "First Pass")
@@ -1142,7 +1130,6 @@ class asm6502():
 
         # Second pass, compute the offsets and populate the symbol table
         self.debug(1, "Second Pass")
-        self.symbols = dict()
 
         # Default to 0x0000. ORG directive overrides
         self.address = 0x0000
@@ -1188,7 +1175,6 @@ class asm6502():
         # Third pass
         # Go through filling in the unknown values from the symbol table
         self.debug(1, "Third Pass")
-        self.listing = list()
         self.instruction_map = [None] * 65536  # A map for where the instructions are so the debugger can know
         # where the start byte of real instructions are.
         # The opcode is entered in the location
@@ -1278,19 +1264,6 @@ class asm6502():
             astring = (("%s" % label).ljust(10)) + (" = " + "$%04X" % offset)
             symboltext.append(astring)
 
-        # print "LISTING"
-        # for i in self.listing:
-        #    print i
-        #
-        # print
-        # print "SYMBOL TABLE"
-        # for label in self.symbols:
-        #    offset = self.symbols[label]
-        #    astring=(("%s" % label).ljust(10)) +(" = "+"$%04X" % offset)
-        #    print astring
-        #
-        # print
-        # self.print_object_code()
         return (listingtext, symboltext)
 
     def print_object_code(self):
@@ -1343,8 +1316,7 @@ class asm6502():
         return ascii
 
     def srecords(self, version, revision, module_name, comment):
-        # print "S19 FORMAT OUTPUT"
-        # print
+        # print("S19 FORMAT OUTPUT\n")
         i = 0
         astring = ""
         theoutput = list()
@@ -1430,8 +1402,7 @@ class asm6502():
             print(line)
 
     def intelhex(self):
-        # print "INTEL HEX FORMAT OUTPUT"
-        # print
+        # print("INTEL HEX FORMAT OUTPUT\n")
         # Insert a star when there are empty spots in the memory map
         i = 0
         astring = ""
@@ -1485,8 +1456,7 @@ class asm6502():
 
     # returns entire 64K memory as hex in the form of 64 bytes per line.
     def hex(self, noaddress=False):
-        # print "HEX FORMAT OUTPUT"
-        # print
+        # print("HEX FORMAT OUTPUT\n")
         theoutput = list()
 
         for i in range(1024):
