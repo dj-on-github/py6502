@@ -206,6 +206,20 @@ Setting clear_sym=True also allows you to establish symbols prior to running the
         a.symbols['skyblue'] = 0x4500
         a.assemble(lines, clear_sym=FALSE)
 
+Getting hex dump format data in and out
+---------------------------------------
+After assembling you can output the object code as a hex dump with * marking the unpopulated spaces
+
+        >>> a.print_object_code()
+        >>> a.print_object_code(canonical=True)
+
+The second version used unix hexdump format, which includes an ASCII decode of printable characters.
+
+You can also load the object code map from files in this format, with an optional offset:
+
+        >>> a.load_object_code("some_file.txt", offset=0x400)
+
+
 Getting IntelHex format data out
 --------------------------------
 After assembling you can output the object code in intelhex format.
