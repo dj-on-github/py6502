@@ -12,10 +12,17 @@ class asm6502():
         self.build_encoding_table()
 
         # some handy lookups
+        self.binary_digits = "01"
         self.decimal_digits = "0123456789"
         self.hex_digits = "abcdefABCDEF0123456789"
         self.octal_digits = "01234567"
         self.letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
+
+        self.bytes_per = dict()
+        self.bytes_per["db"] = 1
+        self.bytes_per["dw"] = 2
+        self.bytes_per["ddw"] = 4
+        self.bytes_per["dqw"] = 8
 
     def clear_state(self, clear_lst=True, clear_sym=True, clear_obj=True):
         self.text_of_lines = list()  # of strings
@@ -43,10 +50,14 @@ class asm6502():
         self.line = 1
 
     def info(self, linenumber, text):
-        self.debug(1, "INFO: Line %d :%s" % (linenumber, text))
+        self.debug(1, "INFO: Line %d: %s" % (linenumber, text))
 
     def warning(self, linenumber, linetext, text):
-        print("WARNING: Line %d :%s" % (linenumber, text))
+        print("WARNING: Line %d: %s" % (linenumber, text))
+        print("  " + linetext)
+
+    def error(self, linenumber, linetext, text):
+        print("ERROR: Line %d: %s" % (linenumber, text))
         print("  " + linetext)
 
     def strip_comments(self, thestring):
@@ -129,9 +140,13 @@ class asm6502():
             self.opcodelist.append((linenumber, opcode))
             self.debug(3, "check_opcode found %s in validopcodes" % opcode)
             return opcode
+        elif opcode in self.validpseudoops:
+            self.opcodelist.append((linenumber, opcode))
+            self.debug(3, "check_opcode found %s in validpseudoops" % opcode)
+            return opcode
         elif opcode in self.validdirectives:
             self.opcodelist.append((linenumber, opcode))
-            self.debug(3, "check_opcode found %s in validirectives" % opcode)
+            self.debug(3, "check_opcode found %s in validdirectives" % opcode)
             return opcode
         else:
             self.debug(3, "check_opcode could not find opcode %s " % opcode)
@@ -192,6 +207,9 @@ class asm6502():
             value = thestring[1:-1]
         elif thestring[0] in self.letters:
             premode = "name"
+            value = thestring
+        elif thestring[0] == thestring[-1] and thestring[0] == '"':
+            premode = "qstring"
             value = thestring
         else:
             self.warning(linenumber, linetext=remainderstr, text="Can\'t make sense of address mode %s" % remainderstr)
@@ -280,170 +298,193 @@ class asm6502():
         linenumber, opcode, premode))
         return "UNDECIDED"
 
-    def decode_extraquadwords(self, linenumber, linetext, s):
-        newstring = "["
+    def decode_extra(self, linenumber, linetext, s, bytes_per, count=False):
+        """
+        generate byte stream for db/dw/ddw/dqw pseudo-ops.
+        s is a comma-separated string of *items*. There may also be whitespace
+        each *item* is one of:
+        - "foo" - quoted string. Expands to 1 *value* per character
+        - 1224 - a *value* in decimal
+        - $1234 - a *value* in hex
+        - @477 - a *value* in octal
+        - %1101 - a *value* in binary
+        - &loop - the *value* of a label
+
+        count=True  -> return list of bytes (used during pass 2). Each *value* is expanded
+                       to bytes_per bytes by either truncating or 0-padding.
+        count=False -> return the number of bytes that would be generated (used during pass 1)
+
+        Various Warnings and Errors are detected and reported:
+        - illegal digit (digit inconsistent with stated number base)
+        - truncation of a *value*
+        - undefined label
+        - trailing delimiter
+        - non-terminated string
+        """
+        # step 1: use a simple FSM to parse the comma-separated list of items
+        # into a list of values. Report error on illegal character
+        state = "IDLE" # IDLE, STRING, HEX, DEC, OCT, BIN, LABEL, DELIM
+        base = 0
+        values = list()
+        val = ""
         for c in s:
-            if c == "$":
-                newstring = newstring + "0x"
-            elif c == "@":
-                newstring = newstring + "0"
-            else:
-                newstring = newstring + c
-        newstring = newstring + "]"
-        thelist = eval(newstring)
-        newlist = list()
-        for i in thelist:
-            if type(i) == int:
-                a = i & 0x00ff
-                b = (((i & 0x000000000000ff00) >> 8) & 0x000000ff)
-                c = (((i & 0x0000000000ff0000) >> 16) & 0x000000ff)
-                d = (((i & 0x00000000ff000000) >> 24) & 0x000000ff)
-                e = (((i & 0x000000ff00000000) >> 32) & 0x000000ff)
-                f = (((i & 0x0000ff0000000000) >> 40) & 0x000000ff)
-                g = (((i & 0x00ff000000000000) >> 48) & 0x000000ff)
-                h = (((i & 0xff00000000000000) >> 56) & 0x000000ff)
-                if (self.littleendian == True):
-                    newlist.append(a)
-                    newlist.append(b)
-                    newlist.append(c)
-                    newlist.append(d)
-                    newlist.append(e)
-                    newlist.append(f)
-                    newlist.append(g)
-                    newlist.append(h)
+            self.debug(3, f"FSM in state {state} with val {val} and processing {c}")
+            if state == "IDLE" or state == "DELIM":
+                # distinguish IDLE/DELIM because ending a line in IDLE is OK
+                # (trailing spaces?) but ending in DELIM is an error
+                val = ""
+                if c == " ":
+                    state = "IDLE" # in case it was DELIM
+                elif c == '"':
+                    state = "STRING"
+                elif c == '$':
+                    state = "HEX"
+                    base = 16
+                elif c == '@':
+                    state = "OCT"
+                    base = 8
+                elif c == '%':
+                    state = "BIN"
+                    base = 2
+                elif c in self.decimal_digits:
+                    state = "DEC"
+                    base = 10
+                    val = c
+                elif c == '&':
+                    state = "LABEL"
+                elif c == ',' and state == "IDLE":
+                    state = "DELIM"
                 else:
-                    newlist.append(h)
-                    newlist.append(g)
-                    newlist.append(f)
-                    newlist.append(e)
-                    newlist.append(d)
-                    newlist.append(c)
-                    newlist.append(b)
-                    newlist.append(a)
-            else:
-                self.warning(linenumber, linetext, "Can't parse word string %s" % newstring)
-                emptylist = list()
-                return emptylist
-        return newlist
-
-    def decode_extradoublewords(self, linenumber, linetext, s):
-        newstring = "["
-        for c in s:
-            if c == "$":
-                newstring = newstring + "0x"
-            elif c == "@":
-                newstring = newstring + "0"
-            else:
-                newstring = newstring + c
-        newstring = newstring + "]"
-        thelist = eval(newstring)
-        newlist = list()
-        for i in thelist:
-            if type(i) == int:
-                a = i & 0x00ff
-                b = (((i & 0x0000ff00) >> 8) & 0x000000ff)
-                c = (((i & 0x00ff0000) >> 16) & 0x000000ff)
-                d = (((i & 0xff000000) >> 24) & 0x000000ff)
-                if (self.littleendian == True):
-                    newlist.append(a)
-                    newlist.append(b)
-                    newlist.append(c)
-                    newlist.append(d)
+                    self.warning(linenumber, linetext, f"Unexpected character FSM={state}")
+            elif state == "STRING":
+                if c == '"':
+                    state = "IDLE"
                 else:
-                    newlist.append(d)
-                    newlist.append(c)
-                    newlist.append(b)
-                    newlist.append(a)
-            else:
-                self.warning(linenumber, linetext, "Can't parse word string %s" % newstring)
-                emptylist = list()
-                return emptylist
-        return newlist
-
-    # Just count the number of bytes without working out what they are
-    def count_extrabytes(self, opcode, operand):
-        count = len(operand.split(','))
-        if opcode == "db":
-            return count
-        elif opcode == "dw":
-            return count * 2
-        elif opcode == "ddw":
-            return count * 4
-        elif opcode == "dqw":
-            return count * 8
-        else:
-            return None
-
-    def decode_extrawords(self, linenumber, linetext, s):
-        csl = [x.strip() for x in s.split(',')]
-        newlist = list()
-        for theword in csl:
-            if theword[0] == '&':
-                label = theword[1:]
-                value = self.symbols[label]
-            elif theword[0] == '$':
-                value = eval("0x" + theword[1:])
-            elif theword[0] == '@':
-                value = eval("0" + theword[1:])
-            else:
-                value = eval(theword)
-
-            if type(value) == int:
-                a = value & 0x00ff
-                b = (((value & 0xff00) >> 8) & 0x00ff)
-                if (self.littleendian == True):
-                    newlist.append(a)
-                    newlist.append(b)
+                    values.append(ord(c))
+            elif state == "HEX":
+                if c in self.hex_digits:
+                    val = val + c
+                elif c == " ":
+                    values.append(int(val,base))
+                    state = "IDLE"
+                elif c == ",":
+                    values.append(int(val,base))
+                    state = "DELIM"
                 else:
-                    newlist.append(b)
-                    newlist.append(a)
+                    self.error(linenumber, linetext, "Unexpected character in hex")
+            elif state == "DEC":
+                if c in self.decimal_digits:
+                    val = val + c
+                elif c == " ":
+                    values.append(int(val,base))
+                    state = "IDLE"
+                elif c == ",":
+                    values.append(int(val,base))
+                    state = "DELIM"
+                else:
+                    self.error(linenumber, linetext, "Unexpected character in decimal")
+            elif state == "OCT":
+                if c in self.octal_digits:
+                    val = val + c
+                elif c == " ":
+                    values.append(int(val,base))
+                    state = "IDLE"
+                elif c == ",":
+                    values.append(int(val,base))
+                    state = "DELIM"
+                else:
+                    self.error(linenumber, linetext, "Unexpected character in octal")
+            elif state == "BIN":
+                if c in self.binary_digits:
+                    val = val + c
+                elif c == " ":
+                    values.append(int(val,base))
+                    state = "IDLE"
+                elif c == ",":
+                    values.append(int(val,base))
+                    state = "DELIM"
+                else:
+                    self.error(linenumber, linetext, "Unexpected character in binary")
+            elif state == "LABEL":
+                if c in self.letters or c in self.decimal_digits:
+                    val = val + c
+                elif c == " ":
+                    if count:
+                        values.append(0)
+                    else:
+                        if val in self.symbols:
+                            values.append(self.symbols[val])
+                        else:
+                            values.append(0)
+                            self.error(linenumber, linetext, f"Undefined symbol {val}")
+                    state = "IDLE"
+                elif c == ",":
+                    if count:
+                        values.append(0)
+                    else:
+                        if val in self.symbols:
+                            values.append(self.symbols[val])
+                        else:
+                            values.append(0)
+                            self.error(linenumber, linetext, f"Undefined symbol {val}")
+                    state = "DELIM"
+                else:
+                    self.warning(linenumber, linetext, "Unexpected character in label")
             else:
-                self.warning(linenumber, linetext, "Can't parse word string %s" % newstring)
-                emptylist = list()
-                return emptylist
-        return newlist
+                self.error(linenumber, linetext, "FSM is confused")
 
-    def decode_extrabytes(self, linenumber, linetext, s):
-        newstring = "["
-        for c in s:
-            if c == "$":
-                newstring = newstring + "0x"
-            elif c == "@":
-                newstring = newstring + "0o"
+        # Tidy up at end.. may be implicit end of number or label
+        if state == "STRING":
+            self.warning(linenumber, linetext, "Unterminated string")
+        elif state in ("DEC", "HEX", "OCT", "BIN"):
+            values.append(int(val,base))
+        elif state == "LABEL":
+            if count:
+                values.append(0)
             else:
-                newstring = newstring + c
-        newstring = newstring + "]"
+                if val in self.symbols:
+                    values.append(self.symbols[val])
+                else:
+                    values.append(0)
+                    self.error(linenumber, linetext, f"Undefined symbol {val}")
+        elif state == "DELIM":
+            self.warning(linenumber, linetext, "Trailing delimiter")
 
-        # Now parse the list
-        thelist = eval(newstring)
-        newlist = list()
-        for i in thelist:
-            if type(i) == int:
-                newlist.append(i)
+        if count:
+            return len(values) * bytes_per
+
+        # step 2: use bytes_per to transform each value into a list of bytes
+        obj_bytes = list()
+        for i in values:
+            err_val = i
+            le_bytes = list()
+            for b in range(bytes_per):
+                le_bytes.append(i & 0xff)
+                i = i >> 8
+            if i > 0:
+                self.warning(linenumber, linetext, f"Truncating number {err_val}")
+            if self.littleendian:
+                obj_bytes = obj_bytes + le_bytes
             else:
-                self.warning(linenumber, linetext, "Can't parse byte string %s" % newstring)
-                emptylist = list()
-                return emptylist
-        return newlist
+                obj_bytes = obj_bytes + le_bytes[::-1]
+        return obj_bytes
+
 
     def decode_value(self, s):
         if (s[0] == '$'):
             ns = int(s[1:], 16)
             return ns
-
-        if (s[0] == '@'):
+        elif (s[0] == '@'):
             ns = int(s[1:], 8)
             return ns
-
-        if (s[0] == '%'):
+        elif (s[0] == '%'):
             ns = int(s[1:], 2)
             return ns
-
-        if (s[0] in self.decimal_digits):
+        elif (s[0] in self.decimal_digits):
             ns = int(s)
             return ns
-
-        return (-1)
+        else:
+            return (-1)
 
     #   Address mode        format                    name applied
     # implicit                                       ~ "implicit"
@@ -472,8 +513,11 @@ class asm6502():
             ["absolute", "absolutex", "absolutey", \
              "absoluteindexedindirect", "absoluteindirect"]
 
+        self.validpseudoops = \
+            ["db", "dw", "ddw", "dqw"]
+
         self.validdirectives = \
-            ["db", "dw", "ddw", "dqw", "str", "org", "le", "be"]
+            ["org", "le", "be"]
 
         self.validopcodes = \
             ["adc", "and", "asl", "bcc", "bcs", "beq", "bit", "bmi", "bne", \
@@ -909,7 +953,7 @@ class asm6502():
         if addrmode == "absoluteindirect":
             return 2
 
-    def firstpasstext(self, thetuple):
+    def pass1text(self, thetuple):
         (offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment,
          extrabytes, num_extrabytes, linetext) = thetuple
         a = ("%d" % linenumber).ljust(4)
@@ -963,7 +1007,7 @@ class asm6502():
         self.debug(1, astring)
         return astring
 
-    def secondpasstext(self, thetuple):
+    def pass2text(self, thetuple):
         (offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment,
          extrabytes, num_extrabytes, linetext) = thetuple
         a = ("%d " % linenumber).ljust(5)
@@ -1018,7 +1062,7 @@ class asm6502():
         self.debug(1, astring)
         self.debug(2, thetuple)
 
-        # If there are extra bytes from a db, dw, dq, do or text operator,
+        # If there are extra bytes from db, dw, ddq, dqw
         # print the resulting hex bytes on the next line.
         if (extrabytes != None) and (len(extrabytes) > 1):
             hexchars = ""
@@ -1037,12 +1081,12 @@ class asm6502():
     # The results end up in self.allstuff in a tuple per entry
     # -1 in fields indicates a value not known yet
     # None in a field indicates that it doesn't exist
-    def parse_line(self, thestring):
+    def parse_line(self, linetext):
         linenumber = self.line
         self.line += 1
-        thetext = "LINE #" + ("%d" % linenumber).ljust(5) + (": %s" % thestring)
+        thetext = "LINE #" + ("%d" % linenumber).ljust(5) + (": %s" % linetext)
         self.debug(2, thetext)
-        mystring, comment = self.strip_comments(thestring)
+        mystring, comment = self.strip_comments(linetext)
         labelstring, mystring = self.strip_label(mystring, linenumber)
         opcode_anycase, operand = self.strip_opcode(mystring, linenumber)
         opcode = self.check_opcode(opcode_anycase, linenumber)
@@ -1087,31 +1131,20 @@ class asm6502():
         if (opcode == "be"):
             self.littleendian = False
 
-        # interpret extra bytes from the db, dw, ddw, dqw directives.
+        # count extra bytes from db, dw, ddw, dqw pseudo-ops now because we need
+        # to leave space for them. Delay parsing the values until pass 3 because we
+        # need a symbol table for label look-up
         extrabytes = list()
-        if (opcode == "db" or opcode == "dw" or opcode == "ddw" or opcode == "dqw"):
-            num_extrabytes = self.count_extrabytes(opcode, operand)
+        if opcode in self.validpseudoops:
+            num_extrabytes = self.decode_extra(linenumber, linetext, operand, self.bytes_per[opcode], count=True)
         else:
             num_extrabytes = None
 
-        # We are moving the extrabytes parsing to pass 3, so we can
-        # add label addresses into DWs and have the label defined when we need it.
-        #
-        # if (opcode=="db") and (operand != None) and (len(operand) > 0):
-        #    extrabytes = self.decode_extrabytes(linenumber, thestring, operand)
-        # elif (opcode=="dw") and (operand != None) and (len(operand) > 0):
-        #    extrabytes = self.decode_extrawords(linenumber, thestring, operand)
-        # elif (opcode=="ddw") and (operand != None) and (len(operand) > 0):
-        #    extrabytes = self.decode_extradoublewords(linenumber, thestring, operand)
-        # elif (opcode=="dqw") and (operand != None) and (len(operand) > 0):
-        #    extrabytes = self.decode_extraquadwords(linenumber, thestring, operand)
-
-        linetext = thestring
         thetuple = (
         offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment,
         extrabytes, num_extrabytes, linetext)
         self.allstuff.append(thetuple)
-        self.firstpasstext(thetuple)
+        self.pass1text(thetuple)
 
         self.debug(2, "addressmode = %s" % addressmode)
         self.debug(2, str(self.allstuff[linenumber - 1]))
@@ -1162,7 +1195,7 @@ class asm6502():
             offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value,
             comment, extrabytes, num_extrabytes, linetext)
             self.allstuff[i] = tuple
-            self.secondpasstext(tuple)
+            self.pass2text(tuple)
 
         # Print out the symbol table
         self.debug(1, "Symbol Table")
@@ -1203,20 +1236,14 @@ class asm6502():
                         highbyte = ((newvalue & 0xff00) >> 8) & 0x00ff
 
             # populate the extrabytes lists
-            if (opcode == "db") and (operand != None) and (len(operand) > 0):
-                extrabytes = self.decode_extrabytes(linenumber, linetext, operand)
-            elif (opcode == "dw") and (operand != None) and (len(operand) > 0):
-                extrabytes = self.decode_extrawords(linenumber, linetext, operand)
-            elif (opcode == "ddw") and (operand != None) and (len(operand) > 0):
-                extrabytes = self.decode_extradoublewords(linenumber, linetext, operand)
-            elif (opcode == "dqw") and (operand != None) and (len(operand) > 0):
-                extrabytes = self.decode_extraquadwords(linenumber, linetext, operand)
+            if (opcode in self.validpseudoops) and (operand != None) and (len(operand) > 0):
+                extrabytes = self.decode_extra(linenumber, linetext, operand, self.bytes_per[opcode], count=False)
 
             tuple = (
             offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value,
             comment, extrabytes, num_extrabytes, linetext)
             self.allstuff[i] = tuple
-            line = self.secondpasstext(tuple)
+            line = self.pass2text(tuple)
             self.listing.append(line)
 
             # Fill in the instruction map
