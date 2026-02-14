@@ -1,5 +1,8 @@
-import re
+#
+# The 65C02 Assembler
+#
 
+import re
 
 class asm6502():
     def __init__(self, debug=0):

@@ -1,9 +1,6 @@
-#!/usr/bin/env python
-
 #
-# The 65C02 Simulator
+# The 65C02 Disassembler
 #
-
 
 class dis6502:
     def __init__(self, object_code, symbols=None):
