@@ -215,7 +215,11 @@ After assembling you can output the object code as a hex dump with * marking the
 
 The second version used unix hexdump format, which includes an ASCII decode of printable characters.
 
-You can also load the object code map from files in this format, with an optional offset:
+An optional offset can be used to affect the address field in the output. For example, to generate data for a PROM programmer that expects the addresses to be relative to the first location in the ROM, choose an offset that causes the start address to wrap back to 0 like this:
+
+        >>> a.print_object_code(canonical=True, offset=-0xb400)
+
+You can also load the object code map from a file in hexdump format, also with an optional offset:
 
         >>> a.load_object_code("some_file.txt", offset=0x400)
 

@@ -1295,12 +1295,17 @@ class asm6502():
 
         return (listingtext, symboltext)
 
-    def print_object_code(self, canonical=False):
+    def print_object_code(self, canonical=False, offset=0):
         """
         default format:
         0000: 1A 27 03 68 65 6C 6C 6F 08 AA 08 CC DD 3F 08 2D
         canonical=True format (matches unix hexdump):
         00000000  1a 27 03 68 65 6c 6c 6f  08 aa 08 cc dd 3f 08 2d  |...hello........|
+
+        offset can be used to affect the address field in the output (for example,
+        to generate data for a PROM programmer that expects the addresses to
+        be relative to the first location in the ROM, choose an offset that
+        causes the start address, considered as a 32-bit value, to wrap back to 0)
         """
         print("OBJECT CODE")
 
@@ -1315,11 +1320,11 @@ class asm6502():
             if self.object_code[i] != -1:
                 printed_a_star = 0
                 if canonical:
-                    astring = "%08x  %02x" % (i, self.object_code[i])
+                    astring = "%08x  %02x" % (0xffffffff & (offset + i), self.object_code[i])
                     ascii = "  |" + ('.' if self.object_code[i]<32 or self.object_code[i]>126 else chr(self.object_code[i]))
                     ascii_trail = "|"
                 else:
-                    astring = "%04X: %02X" % (i, self.object_code[i])
+                    astring = "%04X: %02X" % (0xffff & (offset + i), self.object_code[i])
                 localrun = 1
                 i = i + 1
                 if (i < 65536):
