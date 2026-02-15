@@ -23,7 +23,7 @@ The simulator and disassembler works directly with the object code and symbol ta
 
 An Simple Example: Sending Assembly to the Assembler From Python
 ----------------------------------------------------------------
-This python assembles a few instructions
+This python (see src/small_example.py) assembles a few instructions
 
 from asm6502 import asm6502
 
@@ -42,12 +42,18 @@ from asm6502 import asm6502
         
         lines = thecode.splitlines()
         
-        a = asm6502() 
-        a.assemble(lines)
+        a = asm6502()
+        (lst,sym)= a.assemble(lines)
+        # inspect output..
+        for line in lst:
+            print(line)
+        print()
+        for symbol in sym:
+            print(symbol)
+        print()
+        a.print_object_code()
 
 The output looks like this:
-
-        65C02 Assembler
         LISTING
         1    0000 :                                
         2    0100 :                  ORG $100      
@@ -59,7 +65,7 @@ The output looks like this:
         8    0107 :         E8       INX           
         9    0108 :         E9 01    SBC #$01      
         10   010A :         10 FA    BPL loop      
-        11   010C :         60       RTS           
+        11   010C :         60       RTS
         
         SYMBOL TABLE
         start      = $0100
@@ -70,26 +76,15 @@ The output looks like this:
         0100: A9 10 A2 00 9D 00 10 E8 E9 01 10 FA 60
         *
 
-a.object_code[256:268]
-
-The Object Code Map
--------------------
+The Listing
+-----------
 
 If after running that, you typed this:
-        >>> a.object_code[256:268]
+    >>> a.listing
 
-You would see the list of object code values, but in decimal, since that's how python displays by default:
+you would see the assembly output as an array:
 
-        [169, 16, 162, 0, 157, 0, 16, 232, 233, 1, 16, 250, 96]
-        >>> 
-
-What's going on is the assembler keeps a complete map of the 64K memory space of the 6502 and populates the code and values into that map. The 'object_code' class variable is a list containing the map. Each untouched location is set to -1. Other values indicate the 8 bit value at that location.
-
-So after assembling the code into the map, it is possible to add in other things to the map by assigning to the object_code list. E.G.
-
-        a.object_code[0xfffd] = 0x00
-        a.object_code[0xfffc] = 0x10
-Which would set the reset vector to 0x1000.
+['1    0000 :                                ', '2    0100 :                  org $100      ', '3    0100 : start:                         ', '4    0100 :         A9 10    lda #$10      ', '5    0102 :         A2 00    ldx #$00      ', '6    0104 : loop:                          ', '7    0104 :         9D 00 10 sta $1000,x   ', '8    0107 :         E8       inx           ', '9    0108 :         E9 01    sbc #$01      ', '10   010A :         10 F8    bpl loop      ', '11   010C :         60       rts           ']
 
 The Symbol Table
 ----------------
@@ -98,42 +93,74 @@ You can also see the symbol table as a dictionary after assembling:
     >>> a.symbols
     {'start': 256, 'loop': 260}
 
+The Object Code Map
+-------------------
 
-Directives
-----------
+Finally, you can see the list of object code values, but in decimal, since that's how python displays by default:
+        >>> a.object_code[256:268]
+        [169, 16, 162, 0, 157, 0, 16, 232, 233, 1, 16, 250, 96]
+        >>>
 
-There are a small number of directives:
+The assembler keeps a complete map of the 64K memory space of the 6502 and populates the code and values into that map. The 'object_code' class variable is a list containing the map. Each untouched location is set to -1. Other values indicate the 8 bit value at that location.
+
+After assembling the code into the map, it is possible to add in other things to the map by assigning to the object_code list. E.G.
+
+        a.object_code[0xfffd] = 0x00
+        a.object_code[0xfffc] = 0x10
+Which would set the reset vector to 0x1000.
+
+Pseudo-ops and Directives
+-------------------------
 
 ; Comment
-ORG address ; Sets the current aseembly location
-STR some_text ; Include text as ascii bytes 
-DB comma_separated_list_of_bytes ; $ prefix for hex
-DW comma_separated_list_of_16_bit_numbers ; $ prefix for hex
-DDW comma_separated_list_of_32_bit_numbers ; $ prefix for hex
-DQW comma_separated_list_of_64_bit_numbers ; $ prefix for hex
-LE ; For multi word data (DW, DDW and DQW) sets the encoding to little endian
-BE ; For multi word data (DW, DDW and DQW) sets the encoding to big endian
+ORG address - Set the current assembly location
+DB - Generate 8-bit values
+DW - Generate 16-bit values
+DDW - Generate 32-bit values
+DQW - Generate 64-bit values
+LE - For multi word data (DW, DDW and DQW) set the encoding to little endian
+BE - For multi word data (DW, DDW and DQW) set the encoding to big endian
 The assembler defaults to little endian.
+
+DB, DW, DDW and DQW all work in the same way:
+
+* The argument is one or more comma-separated *items*
+* Each *item* is one of
+  * Decimal number
+  * Hex number (indicated by $ prefix)
+  * Octal number (indicated by @ prefix)
+  * Binary number (indicated by % prefix)
+  * Label (indicated by & prefix)
+  * String (delimited "thus")
+* Each string *item* is transformed into one 8-bit *value* per character (the ASCII code of the character)
+* Every other item represents a single *value*
+* Every *value* is zero-padded or truncated to generate one or more *bytes* in the object code (1 byte-per-value for DB, 2 for DW etc.)
+* The assembler generates a warning when a *value* is truncated
+
+Examples:
+
+DB $0d, "the rain in spain", $0
+DB &entry, &loop                 ; both truncated to low byte
+DW &entry, "fish"                ; each character padded to 16-bits
 
 Prefixes
 --------
 
-$ for hex. $10 = 16
-@ for octal. @10 = 8
-& for a label pointer. &labelname = the 16 bit address of the label, only works with DW.
+The prefixes $, @, % can also be used with numeric arguments to instructions
 
 Labels
 ------
 
-A word followed by a colon makes a label. It can be on it's own line, or in front of an instruction or directive.
+A word followed by a colon makes a label. It can be on its own line, or in front of an instruction or directive.
 
-alabel: ; A label on it's own
-anotherlabel: STA #$10 ; A label with an instruction
+alabel:                 ; A label on its own
+anotherlabel: STA #$10  ; A label with an instruction
+
 Any address or 16 bit data field can be replaced with a declared label and the label address will be inserted there.
-In a DW declaration you need to prefix a label with & to tell the assembler it's a label. This may change. I.E.:
+In a DW declaration you need to prefix a label with & to tell the assembler it's a label. Examples:
 
-        dw  $1000, @2000, 123  ; Implicit numbers have a base prefix. 
-ttable:  dw  &l1, &l2, &l3      ; labels in a DW prefixed with & 
+        dw  $1000, @2000, 123  ; Implicit numbers have a base prefix.
+ttable: dw  &l1, &l2, &l3      ; labels in a DW prefixed with &
         org $1000
 l1:     lda #$20
         jmp skip
@@ -145,8 +172,8 @@ skip:   sta $10
 Assembling Into the Same Map
 ----------------------------
 
-The assembler instance clears it's state before assembling, except for the object_code map. This enables you to assemble multiple pieces of code into different locations and they will be added to the map.
-The print_object_code() class method displays the current object code map
+You can call the assembler() class method multiple times; by default, the object_code map is retained between calls. This allows you to assemble multiple pieces of code into different locations and they will be added to the map.
+The print_object_code() class method displays the current object code map.
 E.G. The following code assembles a sequence, then modifies its origin, then reassembles it:
         from asm6502 import asm6502
         a = asm6502()
@@ -164,6 +191,20 @@ This yields this memory map with the same code in two places.
         *
         2000: EA A9 20 EA 0A 0B 0C 0D 60
         *
+
+The default behaviour of the assemble() class method is set by variables that have default values:
+
+        a.assemble(lines, clear_lst=True, clear_sym=True, clear_obj=False)
+
+Setting clear_sym=False retains the symbol table from the previous call, and setting clear_lst=False allows multiple pieces of source code to be grouped together.
+
+Setting clear_sym=True also allows you to establish symbols prior to running the assembler, then reference them in the code:
+
+        from asm6502 import asm6502
+        a = asm6502()
+        lines = [' ORG $1000', ' NOP', ' LDA #$20', ' JMP syblue', 'here: NOP', ' RTS']
+        a.symbols['skyblue'] = 0x4500
+        a.assemble(lines, clear_sym=FALSE)
 
 Getting IntelHex format data out
 --------------------------------

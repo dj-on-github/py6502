@@ -19,10 +19,13 @@ loop:
 lines = thecode.splitlines()
 
 a = asm6502()
-(l,s) = a.assemble(lines)
-for line in l:
+(lst,sym) = a.assemble(lines)
+# inspect output
+for line in lst:
     print(line)
 print()
-for line in s:
-    print(line)
+for symbol in sym:
+    print(symbol)
+print()
+a.print_object_code()
 

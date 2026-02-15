@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from asm6502 import asm6502
 
@@ -205,16 +205,25 @@ def go(debug=0):
     lines.append("label:")
     lines.append("       nop")
     lines.append("       org $3000")
-    lines.append("vals:  db @10,$aa,8,$cc,$dd")
+    lines.append("vals:  db @10,$aa, 8 ,$cc,$dd")
     lines.append("       be")
     lines.append("       dw $1020,$3040")
     lines.append("       le")
-    lines.append("       dw $1020,$3040")
-    lines.append("       ddw $1020,$3040")
-    lines.append("       dqw $1020,$3040")
+    lines.append("       dw &label,&end")
+    lines.append('       db "hello world"')
+    lines.append('       db $0d, $0d, "some text", $0d, %00001101, @72')
+    lines.append('       dw $0d, $0d, "some text", $0d, %00001101, @72;padded')
+    lines.append("vals2: dw $1020 ,$3040")
+    lines.append("       dw $1020, $3040")
+    lines.append("       ddw $10203040,$50607080")
+    lines.append("       ddw $10203040 ,$50607080")
+    lines.append("       ddw $10203040, $50607080")
+    lines.append("       dqw $1020304050607080,$A0B0C0D0E0F00010")
+    lines.append("       dqw $1020304050607080 ,$A0B0C0D0E0F00010")
+    lines.append("       dqw $1020304050607080, $A0B0C0D0E0F00010")
     lines.append("       adc start")
     lines.append("       adc ($40)")
-    lines.append("end:   bpl vals")
+    lines.append("end:   bpl vals2")
     lines.append("       db $aa,$bb,$cc,$dd")
     lines.append("       nop")
 
