@@ -296,7 +296,7 @@ class dis6502:
         self.hexcodes[0xFF] = ("", "")
 
     def disassemble_line(self, address):
-        # print "DISASSEMBLER ADDR: %04x" % address
+        # print("DISASSEMBLER ADDR: %04x" % address)
         opcode_hex = self.object_code[address]
         operandl = self.object_code[(address + 1) % 65536]
         operandh = self.object_code[(address + 2) % 65536]
@@ -304,10 +304,17 @@ class dis6502:
         operand8 = operandl
         operand16 = operandl + (operandh << 8)
 
-        # print "OPCODE_HEX = %x" % opcode_hex
+        # print("OPCODE_HEX = %x" % opcode_hex)
         opcode, addrmode = self.hexcodes[opcode_hex]
-        # print "DISASSEMBLER OPCD: %02x" % opcode_hex
-        # print "DISASSMBLER OPCD TXT:"+str(opcode)+" "+str(addrmode)
+        # Undefined instructions
+        if opcode == "":
+            if opcode_hex > 32 and opcode_hex < 127:
+                opcode = f'db   ${opcode_hex:02X} ;"{chr(opcode_hex)}"'
+            else:
+                opcode = f'db   ${opcode_hex:02X}'
+
+        # print("DISASSEMBLER OPCD: %02x" % opcode_hex)
+        # print("DISASSEMBLER OPCD TXT:"+str(opcode)+" "+str(addrmode))
         if address in self.labels:
             label = (self.labels[address] + ":").ljust(10)
         else:
