@@ -315,12 +315,6 @@ class dis6502:
 
         # print("DISASSEMBLER OPCD: %02x" % opcode_hex)
         # print("DISASSEMBLER OPCD TXT:"+str(opcode)+" "+str(addrmode))
-        if address in self.labels:
-            label = (self.labels[address] + ":").ljust(10)
-        else:
-            label = " " * 10
-
-        addr_text = "%04x " % address
 
         # Format the operand based on the addressmode
         length = 1
@@ -388,16 +382,19 @@ class dis6502:
             print("ERROR: Disassembler: Address mode %s not found" % addrmode)
             exit()
 
-        if length == 1:
-            binary_text = "%02x       " % opcode_hex
-        elif length == 2:
-            binary_text = "%02x %02x    " % (opcode_hex, operandl)
+        if address in self.labels:
+            label = self.labels[address] + ":"
         else:
-            binary_text = "%02x %02x %02x " % (opcode_hex, operandl, operandh)
+            label = ""
 
-        the_text = label + " " + addr_text + binary_text
-        the_text += (opcode.ljust(5))
-        the_text += operandtext
+        if length == 1:
+            operands = " " * 5
+        elif length == 2:
+            operands = f"{operandl:02x}   "
+        else:
+            operands = f"{operandl:02x} {operandh:02x}"
+
+        the_text = f"{label:11s}{address:04x} {opcode_hex:02x} {operands} {opcode:5s}{operandtext}"
         return (the_text, length)
 
     def disassemble_region(self, address, region_length):
