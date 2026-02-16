@@ -373,7 +373,7 @@ class dis6502:
                 operandtext = "-$%02x" % offset
             length = 2
         elif addrmode == "accumulator":
-            operandtext = "A"
+            operandtext = "a"
             length = 1
         elif addrmode == "implicit":
             operandtext = ""
