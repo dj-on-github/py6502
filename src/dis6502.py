@@ -5,6 +5,7 @@
 class dis6502:
     def __init__(self, object_code, symbols=None):
 
+        self.gen_symbols = False
         self.object_code = object_code
         for i in range(len(self.object_code)):
             if self.object_code[i] < 0:
@@ -329,6 +330,7 @@ class dis6502:
             val = self.labels[op8]
         else:
             val = f"${op8:02x}"
+            self.add_symbol(op8)
         return fstring.format(val = val)
 
     def opform16lab(self, fstring, addr, op8, op16):
@@ -336,6 +338,7 @@ class dis6502:
             val = self.labels[op16]
         else:
             val = f"${op16:04x}"
+            self.add_symbol(op16)
         return fstring.format(val = val)
 
     def opformrel(self, fstring, addr, op8, op16):
@@ -345,10 +348,16 @@ class dis6502:
             val = self.labels[dest]
         else:
             val = f"${op8:02x}"
+            self.add_symbol(dest)
         return f"{val} ; ${dest:04x}"
 
-    def disassemble_line(self, address):
+    def add_symbol(self, addr):
+        if self.gen_symbols:
+            self.symbols[f'L{addr:04X}'] = addr
+
+    def disassemble_line(self, address, gen_symbols=False):
         # print("DISASSEMBLER ADDR: %04x" % address)
+        self.gen_symbols = gen_symbols
         opcode_hex = self.object_code[address]
         operandl = self.object_code[(address + 1) % 65536]
         operandh = self.object_code[(address + 2) % 65536]
@@ -387,9 +396,9 @@ class dis6502:
         the_text = f"{label:11s}{address:04x} {opcode_hex:02x} {operands} {opcode:5s}{operandtext}"
         return (the_text, length)
 
-    def disassemble_region(self, address, region_length):
+    def disassemble_region(self, address, region_length, gen_symbols=True):
         current_address = address
         while current_address < address + region_length:
-            (line, length) = self.disassemble_line(current_address)
+            (line, length) = self.disassemble_line(current_address, gen_symbols)
             yield line
             current_address += length

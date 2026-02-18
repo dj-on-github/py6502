@@ -338,7 +338,7 @@ You can also use the disassembler for code exploration: iteratively disassemblin
 
 00000100  a9 10 a2 00 9d 00 10 e8  e9 01 10 f8 60           |............`|
 
-Now try this:
+Now try this (see small_dis_example.py):
 
 ..
 from asm6502 import asm6502
@@ -353,7 +353,7 @@ z = d.disassemble_region(0x100, 13)
 for line in list(z):
     print (line)
 
-In the code above, disassemble_region returns a generator, list() consumes its output and the 'for' loop prints it. The result looks like this:
+The call to disassemble_region() returns a generator, list() consumes its output and the 'for' loop prints it. The result looks like this:
 
            0100 a9 10    lda  #$10
            0102 a2 00    ldx  #$00
@@ -363,7 +363,7 @@ In the code above, disassemble_region returns a generator, list() consumes its o
            010a 10 f8    bpl  $f8 ; $0104
            010c 60       rts  
 
-Observe that there is a loop that branches to $f8 which is backwards; the helpful comment shows that the destination address is $104. Add entries to the symbol table for the entry point of the code and another for the loop destination. Whenever you manipulate the symbol table you need to call build_symbols_xref() to rebuild an internal data structure
+Observe that there is a loop that branches to $f8 which is backwards; the helpful comment shows that the destination address is $104. Add entries to the symbol table for the entry point of the code and another for the loop destination. Whenever you manipulate the symbol table you need to call build_symbols_xref() to rebuild an internal data structure:
 
 d.symbols['start'] = 0x100
 d.symbols['loop'] = 0x104
@@ -379,8 +379,28 @@ loop:      0104 9d 00 10 sta  $1000,x
            010a 10 f8    bpl  loop ; $0104
            010c 60       rts  
 
+The final trick is that the disassembler will create labels for you. You must call it twice, setting the gen_symbols argument to True. On the first call it populates the symbol table. On the second call, it annotates the symbols onto the output. Like this:
 
+z = d.disassemble_region(0x100, 13, gen_symbols=True)
+list(z)
+# Build data structure
+d.build_symbols_xref()
+# Pass 2: and output..
+z = d.disassemble_region(0x100, 13)
+for line in list(z):
+    print (line)
 
+The first "list(z)" might need some explanation: because disassemble_region is a generator, it does not actually perform the calls until it is enumerated (which is done here using 'list'). The output looks like this:
+
+           0100 a9 10    lda  #$10
+           0102 a2 00    ldx  #$00
+L0104:     0104 9d 00 10 sta  L1000,x
+           0107 e8       inx  
+           0108 e9 01    sbc  #$01
+           010a 10 f8    bpl  L0104 ; $0104
+           010c 60       rts  
+
+A symbol is generated for any referenced address, provided one doesn't currently exist. This includes references outside the region being disassembled (L1000 in this example). You can mix this technique with manual manipulation of the symbol table. For example, as an iterative process of exploring a piece of unknown code.
 
 --------------------------------------------
 Comments to dj@deadhat.com
@@ -395,4 +415,4 @@ TBD 2: Write an output generator for more of the flash/prom/eeprom programming f
 TBD 3: Give it decent error handling
 
 TBD 4: Set up a unit test bench to fuzz it with code and do directed tests.
- 
+
