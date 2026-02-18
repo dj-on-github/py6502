@@ -15,7 +15,7 @@ In both cases, the benefits of the efficiencies of old school methods with the p
 
 This project is a proof-of-concept for this idea. I use it for hacking my Apple //e.  It's a 6502 assembler, disassembler and simulator written in Python. Many old 6502 assemblers exist, but they suffer from inconsistent formats, directives and macro processors. In particular the macro processors tended to be horrible.
 
-The thing that makes it a little different is that instead of offering a 'better assembler language' or 'better macro language' I've stripped down the programs to the very basic functions but written them such that they are intended to be called from a python program that feeds it assembler and gets object code back. This then makes python the macro language. So you get the ability to write assembly code normally, or you can write python to automate the code generation or generate parameterized code, or unroll loops or any number of other things, but using a nice language that makes it easy rather than a set of confusing macro directive written in 1978. 
+The thing that makes it a little different is that instead of offering a 'better assembler language' or 'better macro language' I've stripped down the programs to the very basic functions but written them such that they are intended to be called from a python program that feeds it assembler and gets object code back. This then makes python the macro language. So you get the ability to write assembly code normally, or you can write python to automate the code generation or generate parameterized code, or unroll loops or any number of other things, but using a nice language that makes it easy rather than a set of confusing macro directive written in 1978.
 
 If you want to instrument and test of a bit of code, it's easy to assemble it and then write a program in python to iterate over your chosen input states and check the outputs and simulate the code repeatedly, calling the simulation of each instruction directly from python, coding in whatever analysis meets your needs.
 
@@ -329,6 +329,58 @@ for i in xrange(200):
     print distxt.ljust(status_indent) + " %04x %02x %02x %02x %04x %02x" % (s.pc,s.a,s.x,s.y,s.sp,s.cc)
 
 # Each output line will then show the address, the hex, the instruction executed and the state of the 6502 after the execution.
+
+
+The Disassembler for code exploration
+-------------------------------------
+
+You can also use the disassembler for code exploration: iteratively disassembling code and then annotating labels. For example consider a file tiny.hexdump with this content:
+
+00000100  a9 10 a2 00 9d 00 10 e8  e9 01 10 f8 60           |............`|
+
+Now try this:
+
+..
+from asm6502 import asm6502
+from dis6502 import dis6502
+
+a = asm6502() # only so we can use the loader..
+a.load_object_code("tiny.hexdump")
+
+d = dis6502(a.object_code, a.symbols) # a.symbols is empty
+
+z = d.disassemble_region(0x100, 13)
+for line in list(z):
+    print (line)
+
+In the code above, disassemble_region returns a generator, list() consumes its output and the 'for' loop prints it. The result looks like this:
+
+           0100 a9 10    lda  #$10
+           0102 a2 00    ldx  #$00
+           0104 9d 00 10 sta  $1000,x
+           0107 e8       inx  
+           0108 e9 01    sbc  #$01
+           010a 10 f8    bpl  $f8 ; $0104
+           010c 60       rts  
+
+Observe that there is a loop that branches to $f8 which is backwards; the helpful comment shows that the destination address is $104. Add entries to the symbol table for the entry point of the code and another for the loop destination. Whenever you manipulate the symbol table you need to call build_symbols_xref() to rebuild an internal data structure
+
+d.symbols['start'] = 0x100
+d.symbols['loop'] = 0x104
+d.build_symbols_xref()
+
+Call disassemble_region() again as before and you will see the labels annotated into the output:
+
+start:     0100 a9 10    lda  #$10
+           0102 a2 00    ldx  #$00
+loop:      0104 9d 00 10 sta  $1000,x
+           0107 e8       inx  
+           0108 e9 01    sbc  #$01
+           010a 10 f8    bpl  loop ; $0104
+           010c 60       rts  
+
+
+
 
 --------------------------------------------
 Comments to dj@deadhat.com

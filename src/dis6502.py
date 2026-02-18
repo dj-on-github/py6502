@@ -298,6 +298,55 @@ class dis6502:
         self.hexcodes[0xEF] = ("", "")
         self.hexcodes[0xFF] = ("", "")
 
+        # map from addressing mode to formatting string, formatter and instruction length
+        self.amodeformat = dict()
+        self.amodeformat["zeropage"]                 = ("{val}",    self.opform8lab,  2)
+        self.amodeformat["zeropagex"]                = ("{val},x",  self.opform8lab,  2)
+        self.amodeformat["zeropagey"]                = ("{val},y",  self.opform8lab,  2)
+        self.amodeformat["zeropageindexedindirectx"] = ("({val},x)",self.opform8lab,  2) # use the same name
+        self.amodeformat["zeropageindexedindirecty"] = ("({val}),y",self.opform8lab,  2) # because the formats print the same!
+        self.amodeformat["zeropageindirect"]         = ("({val})",  self.opform8lab,  2)
+        self.amodeformat["immediate"]                = ("#{val}",   self.opform8,     2)
+        self.amodeformat["absolute"]                 = ("{val}",    self.opform16lab, 3)
+        self.amodeformat["absolutex"]                = ("{val},x",  self.opform16lab, 3)
+        self.amodeformat["absolutey"]                = ("{val},y",  self.opform16lab, 3)
+        self.amodeformat["absoluteindirect"]         = ("({val})",  self.opform16lab, 3) # also used for "indirect" (JMP)
+        self.amodeformat["absoluteindexedindirect"]  = ("({val},x)",self.opform16lab, 3)
+        self.amodeformat["relative"]                 = ("{val}",    self.opformrel,   2)
+        self.amodeformat["accumulator"]              = ("a",        self.opform,      1)
+        self.amodeformat["implicit"]                 = ("",         self.opform,      1)
+
+    # These formatters all have the same argument list but use it in different ways
+    def opform(self, fstring, addr, op8, op16):
+        return fstring
+
+    def opform8(self, fstring, addr, op8, op16):
+        val = f"${op8:02x}"
+        return fstring.format(val = val)
+
+    def opform8lab(self, fstring, addr, op8, op16):
+        if op8 in self.labels:
+            val = self.labels[op8]
+        else:
+            val = f"${op8:02x}"
+        return fstring.format(val = val)
+
+    def opform16lab(self, fstring, addr, op8, op16):
+        if op16 in self.labels:
+            val = self.labels[op16]
+        else:
+            val = f"${op16:04x}"
+        return fstring.format(val = val)
+
+    def opformrel(self, fstring, addr, op8, op16):
+        off16 = 0xff00 | op8 if op8 > 0x7f else op8
+        dest = (addr + 2 + off16) & 0xffff
+        if dest in self.labels:
+            val = self.labels[dest]
+        else:
+            val = f"${op8:02x}"
+        return f"{val} ; ${dest:04x}"
+
     def disassemble_line(self, address):
         # print("DISASSEMBLER ADDR: %04x" % address)
         opcode_hex = self.object_code[address]
@@ -309,81 +358,19 @@ class dis6502:
 
         # print("OPCODE_HEX = %x" % opcode_hex)
         opcode, addrmode = self.hexcodes[opcode_hex]
-        # Undefined instructions
+
         if opcode == "":
+            # Undefined instructions
+            operandtext = ""
+            length = 1
             if opcode_hex > 32 and opcode_hex < 127:
                 opcode = f'db   ${opcode_hex:02X} ;"{chr(opcode_hex)}"'
             else:
                 opcode = f'db   ${opcode_hex:02X}'
-
-        # print("DISASSEMBLER OPCD: %02x" % opcode_hex)
-        # print("DISASSEMBLER OPCD TXT:"+str(opcode)+" "+str(addrmode))
-
-        # Format the operand based on the addressmode
-        length = 1
-        if addrmode == "zeropageindexedindirectx":
-            operandtext = "($%02x,x)" % operand8
-            length = 2
-        elif addrmode == "zeropageindexedindirecty":
-            operandtext = "($%02x),y" % operand8
-            length = 2
-        elif addrmode == "zeropageindirect":
-            operandtext = "($%02x)" % operand8
-            length = 2
-        elif addrmode == "zeropage":
-            operandtext = "$%02x" % operand8
-            length = 2
-        elif addrmode == "zeropagex":
-            operandtext = "$%02x,x" % operand8
-            length = 2
-        elif addrmode == "zeropagey":
-            operandtext = "$%02x,y" % operand8
-            length = 2
-        elif addrmode == "immediate":
-            operandtext = "#$%02x" % operand8
-            length = 2
-        elif addrmode == "absolutey":
-            operandtext = "$%04x,y" % operand16
-            length = 3
-        elif addrmode == "absolute":
-            operandtext = "$%04x" % operand16
-            length = 3
-        elif addrmode == "absoluteindirect":
-            operandtext = "($%04x)" % operand16
-            length = 3
-        elif addrmode == "absoluteindexedindirect":
-            operandtext = "($%04x,x)" % operand16
-            length = 3
-        elif addrmode == "absolutex":
-            operandtext = "$%04x,x" % operand16
-            length = 3
-        elif addrmode == "indirect":
-            operandtext = "($%04x)" % operand16
-            length = 3
-        elif addrmode == "relative":
-            if operand8 < 128:
-                operandtext = "+$%02x" % operand8
-            else:
-                offset = (operand8 & 0x7f) - 128
-
-                offset = -offset
-                operandtext = "-$%02x" % offset
-            length = 2
-        elif addrmode == "accumulator":
-            operandtext = "a"
-            length = 1
-        elif addrmode == "implicit":
-            operandtext = ""
-            length = 1
-        elif addrmode == "":
-            operandtext = ""
-            length = 1
-        elif addrmode == None:
-            operandtext = ""
-            length = 1
         else:
-            print("ERROR: Disassembler: Address mode %s not found" % addrmode)
-            exit()
+            # Format the operand based on the addressmode
+            fstring, formatter, length = self.amodeformat[addrmode]
+            operandtext = formatter(fstring, address, operand8, operand16)
 
         if address in self.labels:
             label = self.labels[address] + ":"
