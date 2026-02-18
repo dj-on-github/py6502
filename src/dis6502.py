@@ -11,15 +11,18 @@ class dis6502:
                 self.object_code[i] = 0x00
 
         self.labels = {}
-        if symbols == None:
-            self.have_symbols = False
-        else:
-            self.have_symbols = True
-
+        self.symbols = {}
+        if symbols:
             self.symbols = symbols
-            for label, offset in self.symbols.items():
-                self.labels[offset] = label
+
         self.build_opcode_table()
+        self.build_symbols_xref()
+
+
+    def build_symbols_xref(self):
+        self.labels = {};
+        for label, offset in self.symbols.items():
+            self.labels[offset] = label
 
     def build_opcode_table(self):
         self.hexcodes = dict()
