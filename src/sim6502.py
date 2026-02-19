@@ -1,3 +1,7 @@
+#
+# The 65C02 Simulator
+#
+
 import memory_map
 
 class Flags(object):
@@ -13,9 +17,6 @@ class Flags(object):
 
 # TODO: check for other cases of % on negative numbers leading to negative underflow
 
-#
-# The 65C02 Simulator
-#
 class sim6502(object):
     def __init__(self, object_code=None, address=0x0, symbols=None):
         self.pc = 0x0000

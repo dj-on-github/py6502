@@ -1,5 +1,8 @@
-import re
+#
+# The 65C02 Assembler
+#
 
+import re
 
 class asm6502():
     def __init__(self, debug=0):
@@ -1292,37 +1295,85 @@ class asm6502():
 
         return (listingtext, symboltext)
 
-    def print_object_code(self):
+    def print_object_code(self, canonical=False, offset=0):
+        """
+        default format:
+        0000: 1A 27 03 68 65 6C 6C 6F 08 AA 08 CC DD 3F 08 2D
+        canonical=True format (matches unix hexdump):
+        00000000  1a 27 03 68 65 6c 6c 6f  08 aa 08 cc dd 3f 08 2d  |...hello........|
+
+        offset can be used to affect the address field in the output (for example,
+        to generate data for a PROM programmer that expects the addresses to
+        be relative to the first location in the ROM, choose an offset that
+        causes the start address, considered as a 32-bit value, to wrap back to 0)
+        """
         print("OBJECT CODE")
 
         # Insert a star when there are empty spots in the memory map
         i = 0
         astring = ""
+        ascii = ""
+        ascii_trail = ""
         printed_a_star = 0
+        start_i = 0
         while (i < 65536):
             if self.object_code[i] != -1:
                 printed_a_star = 0
-                astring = "%04X: %02X" % (i, self.object_code[i])
+                if canonical:
+                    astring = "%08x  %02x" % (0xffffffff & (offset + i), self.object_code[i])
+                    ascii = "  |" + ('.' if self.object_code[i]<32 or self.object_code[i]>126 else chr(self.object_code[i]))
+                    ascii_trail = "|"
+                else:
+                    astring = "%04X: %02X" % (0xffff & (offset + i), self.object_code[i])
                 localrun = 1
                 i = i + 1
                 if (i < 65536):
                     nextval = self.object_code[i]
                     while (nextval != -1) and (localrun < 16):
-                        astring = astring + " %02X" % self.object_code[i]
+                        if canonical:
+                            astring = astring + " %02x" % self.object_code[i]
+                            ascii = ascii + ('.' if self.object_code[i]<32 or self.object_code[i]>126 else chr(self.object_code[i]))
+                            if localrun == 7:
+                                astring = astring + " "
+                        else:
+                            astring = astring + " %02X" % self.object_code[i]
                         i = i + 1
                         localrun = localrun + 1
                         if (i < 65536):
                             nextval = self.object_code[i]
                         else:
                             nextval = -1
-                    print(astring)
+                    print(astring + " " *3*(16-localrun) + " " *(localrun < 8) + ascii + ascii_trail)
                 else:
-                    print(astring)
+                    # corner case where 0xffff is defined but 0xfffe is not
+                    print(astring + " " *3*15 + " " + ascii + ascii_trail)
             else:
                 if (printed_a_star == 0):
                     print("*")
                     printed_a_star = 1
                 i = i + 1
+
+    def load_object_code(self, infile, offset=0):
+        """
+        Populate the object code map with data from infile, applying an optional
+        address offset. infile is in unix hexdump format: the address and data
+        information is used and the ASCII dump is ignored. No checking (eg for
+        address overlap) is performed.
+        """
+        with open(infile, 'r') as file:
+            for line in file:
+                parts = line.split()
+                addr = offset + int(parts.pop(0),16)
+                aoff = 0
+                # a stream of 8-bit values followed by ASCII decode, so rugged approach
+                # is to check for valid 2-character hex and break when we run out
+                for i in parts:
+                    val = re.match(r'[a-fA-F0-9][a-fA-F0-9]', i)
+                    if val:
+                        self.object_code[addr + aoff] = int(val[0],16)
+                        aoff = aoff + 1
+                    else:
+                        break
 
     def srecord_checksum(self, astring):
         checksum = 0

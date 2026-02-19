@@ -1,4 +1,5 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
+
 from asm6502 import asm6502
 a = asm6502(debug=0)
 lines = [' ORG $1000', ' NOP', ' LDA #$20', 'here: NOP', '  DB 10,11,12,13', '  RTS']
