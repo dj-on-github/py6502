@@ -38,15 +38,6 @@ class asm6502():
             for i in range(0, 65536):
                 self.object_code.append(-1)  # -1 indicate location not populated
 
-        self.labeldict = dict()
-        self.labellist = list()
-
-        self.opcodelist = list()
-        self.opcodedict = dict()
-
-        self.addressmodes = dict()
-        self.addressmmodelist = list()
-
         self.littleendian = True  # Use le and be directives to change this
 
         self.allstuff = list()
@@ -87,16 +78,12 @@ class asm6502():
             returnstr = thestring[position + 1:].strip()
             position = labelstr.find(' ')
             if (position == -1):
-                self.labeldict[labelstr] = linenumber
-                self.labellist.append((linenumber, labelstr))
                 self.debug(2, "Line %d Label %s found at line %d" % (linenumber, labelstr, linenumber))
                 return (labelstr, returnstr)
             else:
                 labelstr = labelstr[:position]
                 self.warning(linenumber=linenumber, linetext=thestring,
                              text="More than one thing in the label field. Ignoring everything between the first space and the colon")
-                self.labellist.append((linenum, labelstr))
-                self.labeldict[labelstr] = linenum
                 self.info(linenumber, text="Label %s found at line %d" % (labelstr, linenumber))
                 return (labelstr, returnstr)
 
@@ -140,15 +127,12 @@ class asm6502():
             self.debug(3, "check_opcode returning null")
             return None
         elif opcode in self.validopcodes:
-            self.opcodelist.append((linenumber, opcode))
             self.debug(3, "check_opcode found %s in validopcodes" % opcode)
             return opcode
         elif opcode in self.validpseudoops:
-            self.opcodelist.append((linenumber, opcode))
             self.debug(3, "check_opcode found %s in validpseudoops" % opcode)
             return opcode
         elif opcode in self.validdirectives:
-            self.opcodelist.append((linenumber, opcode))
             self.debug(3, "check_opcode found %s in validdirectives" % opcode)
             return opcode
         else:
