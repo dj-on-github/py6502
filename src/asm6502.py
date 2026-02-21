@@ -50,6 +50,10 @@ class asm6502():
         self.allstuff = list()
         self.line = 1
 
+    def debug(self, level=0, astring="No String Given"):
+        if (level <= self.debuglevel):
+            print("   DEBUG(%d):%s" % (level, astring))
+
     def info(self, linenumber, text):
         self.debug(1, "INFO: Line %d: %s" % (linenumber, text))
 
@@ -62,18 +66,12 @@ class asm6502():
         print("  " + linetext)
 
     def strip_comments(self, thestring):
-        self.debug(3, "string passed to strip_comments()=%s" % thestring)
+        self.debug(3, "STRIP_COMMENTS %s" % thestring)
         position = thestring.find(';')
         if (position == -1):
             return (thestring, "")
         else:
             return (thestring[:position].rstrip(), thestring[position:].rstrip())
-
-    def debug(self, level=0, astring="No String Given"):
-        if (level > self.debuglevel):
-            pass
-        else:
-            print("   DEBUG(%d):%s" % (level, astring))
 
     # find a label at the front. Strip it and return the symbol
     def strip_label(self, thestring, linenumber):
@@ -288,7 +286,7 @@ class asm6502():
             if (self.decode_value(value) < 256):
                 return "zeropageindirect"
 
-        self.debug(2, "INFO: GOT TO END OF IDENTIFY_ADDRESSMODE: Line %d opcode:%s premode:%s" % (
+        self.debug(2, "AT END OF IDENTIFY_ADDRESSMODE: Line %d opcode:%s premode:%s" % (
         linenumber, opcode, premode))
         return "UNDECIDED"
 
@@ -322,7 +320,7 @@ class asm6502():
         values = list()
         val = ""
         for c in s:
-            self.debug(3, f"FSM in state {state} with val {val} and processing {c}")
+            self.debug(4, f"FSM in state {state} with val {val} and processing {c}")
             if state == "IDLE" or state == "DELIM":
                 # distinguish IDLE/DELIM because ending a line in IDLE is OK
                 # (trailing spaces?) but ending in DELIM is an error
@@ -543,17 +541,17 @@ class asm6502():
 
         self.absoluteopcodes = \
             ["adc", "and", "asl", "bit", "cmp", "cpx", "cpy", "dec", "eor", "inc", \
-             "jmp", "jsr", "lda", "ldx", "ldy", "lsr", "ora", "rol", "ror", "sbc", \
-             "sta", "stx", "sty", "stz", "trb", "tsb"]
+             "lda", "ldx", "ldy", "lsr", "ora", "rol", "ror", "sbc", "sta", "stx", \
+             "sty", "stz", "trb", "tsb", "jmp", "jsr"]
 
         self.absolutexopcodes = \
-            ["adc", "and", "asl", "bit", "cmp", "dec", "eor", "inc", \
-             "lda", "lsr", "ora", "rol", "ror", "sbc", \
-             "sta", "stz", "ldy"]
+            ["adc", "and", "asl", "bit", "cmp",               "dec", "eor", "inc", \
+             "lda",               "lsr", "ora", "rol", "ror", "sbc", "sta", "stz", \
+             "ldy"]
 
         self.absoluteyopcodes = \
-            ["adc", "and", "cmp", "eor", \
-             "lda", "ldx", "ora", "sbc", "sta"]
+            ["adc", "and",               "cmp",                      "eor",        \
+             "lda",                      "ora",               "sbc", "sta", "ldx"]
 
         self.zeropagexopcodes = \
             ["adc", "and", "cmp", "eor", "lda", "dec", "bit", "asl", "ldy", \
@@ -999,6 +997,7 @@ class asm6502():
         h = comment
         astring = a + b + c + d + e + f + g + h
         self.debug(1, astring)
+        self.debug(1, thetuple)
         return astring
 
     def pass2text(self, thetuple):
@@ -1086,12 +1085,12 @@ class asm6502():
         opcode = self.check_opcode(opcode_anycase, linenumber)
         premode, value = self.identify_addressmodeformat(operand, linenumber)
         addressmode = self.identify_addressmode(opcode, premode, value, linenumber)
-        self.debug(3, "PARSE LINE: opcode=%s  addressmode=%s" % (str(opcode), addressmode))
+        self.debug(3, "PARSE_LINE: opcode=%s  addressmode=%s" % (str(opcode), addressmode))
         if (opcode != None) and (addressmode != "UNDECIDED"):
             astring = opcode + addressmode
-            self.debug(3, "PARSE LINE 2 astring=%s" % astring)
+            self.debug(3, "PARSE_LINE 2 astring=%s" % astring)
             if astring in self.hexmap:
-                self.debug(3, "PARSE LINE 3 astring=%s  self.hexmap[astring]=0x%x" % (astring, self.hexmap[astring]))
+                self.debug(3, "PARSE_LINE 3 astring=%s  self.hexmap[astring]=0x%x" % (astring, self.hexmap[astring]))
                 opcode_val = self.hexmap[astring]
             else:
                 opcode_val = None
@@ -1134,14 +1133,11 @@ class asm6502():
         else:
             num_extrabytes = None
 
-        thetuple = (
+        tuple = (
         offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment,
         extrabytes, num_extrabytes, linetext)
-        self.allstuff.append(thetuple)
-        self.pass1text(thetuple)
-
-        self.debug(2, "addressmode = %s" % addressmode)
-        self.debug(2, str(self.allstuff[linenumber - 1]))
+        self.allstuff.append(tuple)
+        self.pass1text(tuple)
         self.debug(2, "-----------------------")
 
     # Perform the three passes of the assembly. Optionally retain stuff from
@@ -1190,6 +1186,7 @@ class asm6502():
             comment, extrabytes, num_extrabytes, linetext)
             self.allstuff[i] = tuple
             self.pass2text(tuple)
+            self.debug(2, "-----------------------")
 
         # Print out the symbol table
         self.debug(1, "Symbol Table")
