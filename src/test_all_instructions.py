@@ -205,6 +205,7 @@ def go(debug=0):
     lines.append("label:")
     lines.append("       nop")
     lines.append("       org $3000")
+    lines.append("val:   db 42")
     lines.append("vals:  db @10,$aa, 8 ,$cc,$dd")
     lines.append("       be")
     lines.append("       dw $1020,$3040")

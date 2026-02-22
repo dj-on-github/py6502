@@ -1002,9 +1002,9 @@ class asm6502():
         self.debug(1, astring)
         self.debug(2, thetuple)
 
-        # If there are extra bytes from db, dw, ddq, dqw
+        # If there are bytes from db, dw, ddq, dqw
         # print the resulting hex bytes on the next line.
-        if (extrabytes != None) and (len(extrabytes) > 1):
+        if (extrabytes != None) and (len(extrabytes) > 0):
             hexchars = ""
             index = 0
             for index in range(0, len(extrabytes) - 1):
