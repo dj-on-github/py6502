@@ -30,7 +30,7 @@ class asm6502():
     def clear_state(self, clear_lst=True, clear_sym=True, clear_obj=True):
         self.text_of_lines = list()  # of strings
         if clear_lst:
-            self.listing = list()  # parsed lines (symbol, opcode, addrmode, value
+            self.listing = list()  # parsed lines (symbol, opcode, addrmode, value)
         if clear_sym:
             self.symbols = dict()  # of (name,line#)
         if clear_obj:
@@ -152,7 +152,6 @@ class asm6502():
             premode = "nothing"
             value = ""
         elif thestring[0] == "#":
-            # It's immediate
             premode = "immediate"
             value = thestring[1:]
         elif (thestring == "a") or (thestring == "A"):
@@ -945,66 +944,14 @@ class asm6502():
         if addrmode == "absoluteindirect":
             return 2
 
-    def pass1text(self, thetuple):
-        (offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment,
-         extrabytes, num_extrabytes, linetext) = thetuple
-        a = ("%d" % linenumber).ljust(4)
-        if (labelstring != None):
-            b = (": %s" % labelstring).ljust(10)
-        else:
-            b = "          "
-
-        if (opcode_val == None):
-            c = "   "
-        else:
-            if (opcode_val > -1):
-                c = "%02X " % opcode_val
-            else:
-                c = "?? "
-
-        if (lowbyte == None):
-            d = "   "
-        else:
-            if (lowbyte > -1):
-                d = "%02X " % lowbyte
-            else:
-                d = "?? "
-
-        if (highbyte == None):
-            e = "   "
-        else:
-            if (highbyte > -1):
-                e = "%02X " % highbyte
-            else:
-                e = "?? "
-
-        # Print the opcode in 4 spaces
-        if (opcode == None):
-            f = "    "
-        else:
-            f = opcode.ljust(4)
-
-        # Either print the operand in 10 spaces or print 10 spaces
-        # when there is no operand
-        if (operand == None):
-            g = "          "
-        else:
-            if (len(operand) > 0):
-                g = operand.ljust(10)
-            else:
-                g = "          "
-
-        h = comment
-        astring = a + b + c + d + e + f + g + h
-        self.debug(1, astring)
-        self.debug(1, thetuple)
-        return astring
-
-    def pass2text(self, thetuple):
+    def print_text(self, thetuple, pass1=False):
         (offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment,
          extrabytes, num_extrabytes, linetext) = thetuple
         a = ("%d " % linenumber).ljust(5)
-        aa = ("%04X " % offset)
+        if pass1:
+            aa = "???? "
+        else:
+            aa = ("%04X " % offset)
 
         if (labelstring != None) and (labelstring != ""):
             b = (": %s:" % labelstring).ljust(10)
@@ -1137,7 +1084,7 @@ class asm6502():
         offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment,
         extrabytes, num_extrabytes, linetext)
         self.allstuff.append(tuple)
-        self.pass1text(tuple)
+        self.print_text(tuple, pass1=True)
         self.debug(2, "-----------------------")
 
     # Perform the three passes of the assembly. Optionally retain stuff from
@@ -1185,7 +1132,7 @@ class asm6502():
             offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value,
             comment, extrabytes, num_extrabytes, linetext)
             self.allstuff[i] = tuple
-            self.pass2text(tuple)
+            self.print_text(tuple)
             self.debug(2, "-----------------------")
 
         # Print out the symbol table
@@ -1229,7 +1176,7 @@ class asm6502():
             offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value,
             comment, extrabytes, num_extrabytes, linetext)
             self.allstuff[i] = tuple
-            line = self.pass2text(tuple)
+            line = self.print_text(tuple)
             self.listing.append(line)
 
             # Fill in the instruction map
