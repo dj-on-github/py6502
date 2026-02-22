@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from asm6502 import asm6502
+import sys
 
 def go(debug=0):
     lines = list()
@@ -238,4 +239,14 @@ def go(debug=0):
         print(line)
 
     a.print_object_code()
+
+    with open('test_all_instructions.lst', 'w') as sys.stdout:
+        for line in listingtext:
+            print(line)
+    sys.stdout = sys.__stdout__
+
+    with open('test_all_instructions.hexdump', 'w') as sys.stdout:
+        a.print_object_code(canonical=True)
+    sys.stdout = sys.__stdout__
+
 go()
