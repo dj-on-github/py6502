@@ -289,7 +289,7 @@ class asm6502():
         self.debug(2, "IDENTIFY_ADDRESSMODE UNDECIDED")
         return "UNDECIDED"
 
-    def decode_extra(self, linenumber, linetext, s, bytes_per, littleendian, count=False):
+    def decode_extra(self, linenumber, linetext, s, bytes_per, count=False):
         """
         generate byte stream for db/dw/ddw/dqw pseudo-ops.
         s is a comma-separated string of *items*. There may also be whitespace
@@ -454,7 +454,7 @@ class asm6502():
                 i = i >> 8
             if i > 0:
                 self.warning(linenumber, linetext, f"Truncating number {err_val}")
-            if littleendian:
+            if self.littleendian:
                 obj_bytes = obj_bytes + le_bytes
             else:
                 obj_bytes = obj_bytes + le_bytes[::-1]
@@ -948,7 +948,7 @@ class asm6502():
 
     def print_text(self, thetuple, pass1=False):
         (addr, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment,
-         extrabytes, num_extrabytes, linetext, littleendian) = thetuple
+         extrabytes, num_extrabytes, linetext) = thetuple
         a = ("%d " % linenumber).ljust(5)
         if pass1:
             aa = "???? "
@@ -1062,25 +1062,18 @@ class asm6502():
 
         offset = -1
 
-        # Handle switches between little endian and big endian; the current endianness is tracked
-        # in self but stored per line because it can't be used until decode_extra is called in pass 3
-        if (opcode == "le"):
-            self.littleendian = True
-        if (opcode == "be"):
-            self.littleendian = False
-
         # count extra bytes from db, dw, ddw, dqw pseudo-ops now because we need
         # to leave space for them. Delay parsing the values until pass 3 because we
         # need a symbol table for label look-up
         extrabytes = list()
         if opcode in self.validpseudoops:
-            num_extrabytes = self.decode_extra(linenumber, linetext, operand, self.bytes_per[opcode], False, count=True)
+            num_extrabytes = self.decode_extra(linenumber, linetext, operand, self.bytes_per[opcode], count=True)
         else:
             num_extrabytes = 0
 
         tuple = (
         offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment,
-            extrabytes, num_extrabytes, linetext, self.littleendian)
+            extrabytes, num_extrabytes, linetext)
         self.allstuff.append(tuple)
         self.print_text(tuple, pass1=True)
         self.debug(2, "-----------------------")
@@ -1105,7 +1098,7 @@ class asm6502():
         for i in range(len(self.allstuff)):
             tuple = self.allstuff[i]
             (offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value,
-             comment, extrabytes, num_extrabytes, linetext, littleendian) = tuple
+             comment, extrabytes, num_extrabytes, linetext) = tuple
             # Handle ORG directive
             if (opcode == "org"):
                 newaddr = self.decode_value(value)
@@ -1128,7 +1121,7 @@ class asm6502():
             # these fields in tuple (may) have been updated: offset, so replace tuple
             tuple = (
             offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value,
-                comment, extrabytes, num_extrabytes, linetext, littleendian)
+                comment, extrabytes, num_extrabytes, linetext)
             self.allstuff[i] = tuple
             self.print_text(tuple)
             self.debug(2, "-----------------------")
@@ -1144,7 +1137,7 @@ class asm6502():
         for i in range(len(self.allstuff)):
             tuple = self.allstuff[i]
             (offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value,
-             comment, extrabytes, num_extrabytes, linetext, littleendian) = tuple
+             comment, extrabytes, num_extrabytes, linetext) = tuple
 
             if lowbyte == -1:
                 if addressmode == "relative":
@@ -1170,14 +1163,18 @@ class asm6502():
                         # unresolved absolute
                         highbyte = (newvalue >> 8) & 0x00ff
 
-            # populate the extrabytes lists, with requested byte order
+            # populate the extrabytes lists, using the requested byte order tracked from stored opcode
+            if (opcode == "le"):
+                self.littleendian = True
+            if (opcode == "be"):
+                self.littleendian = False
             if (opcode in self.validpseudoops) and (operand != None) and (len(operand) > 0):
-                extrabytes = self.decode_extra(linenumber, linetext, operand, self.bytes_per[opcode], littleendian, count=False)
+                extrabytes = self.decode_extra(linenumber, linetext, operand, self.bytes_per[opcode], count=False)
 
             # these fields in tuple (may) have been updated: lowbyte, highbyte, extrabytes so replace tuple
             tuple = (
             offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value,
-                comment, extrabytes, num_extrabytes, linetext, littleendian)
+                comment, extrabytes, num_extrabytes, linetext)
             self.allstuff[i] = tuple
             line = self.print_text(tuple)
             self.listing.append(line)
