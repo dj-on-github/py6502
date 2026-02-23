@@ -1156,7 +1156,6 @@ class asm6502():
                     if (value in self.symbols):
                         newvalue = self.symbols[value]
                         lowbyte = newvalue & 0x00ff
-                        highbyte = (newvalue >> 8) & 0x00ff
                     else:
                         self.warning(linenumber, "", f"unresolved reference to label {self.symbols}")
                     if (highbyte == -1) and (addressmode in self.modeswithhighbytevalue):
