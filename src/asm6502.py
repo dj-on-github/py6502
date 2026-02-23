@@ -29,6 +29,7 @@ class asm6502():
 
     def clear_state(self, clear_lst=True, clear_sym=True, clear_obj=True):
         self.text_of_lines = list()  # of strings
+        self.address = 0 # ORG overrides
         if clear_lst:
             self.listing = list()  # parsed lines (symbol, opcode, addrmode, value)
         if clear_sym:
@@ -146,6 +147,7 @@ class asm6502():
             return None
 
     def identify_addressmodeformat(self, remainderstr, linenumber):
+        self.debug(3, f"IDENTIFY_ADDRESSMODEFORMAT(str={remainderstr} line={linenumber})")
         # remove all whitespace
         thestring = remainderstr.replace(" ", "")
         if (thestring == ""):
@@ -207,7 +209,6 @@ class asm6502():
             premode = "nothing"
             value = ""
 
-        self.debug(2, "premode = %s, value = %s" % (premode, value))
         # We've classified the basic formats in premode
         # some formats mean different things with different instructions
         # E.G. a number is an offset with a branch but absolute with a load
@@ -261,9 +262,9 @@ class asm6502():
             return "absolute"
         self.debug(3, "IDENTIFY_ADDRESSMODE for zeropagex opcode=%s premode=%s" % (opcode, premode))
         if (opcode in self.zeropagexopcodes):
-            self.debug(3, "opcode was in zeropagexopcodes")
+            self.debug(3, "opcode     in zeropagexopcodes")
         else:
-            self.debug(3, "opcode wasnt in zeropagexopcodes")
+            self.debug(3, "opcode not in zeropagexopcodes")
         if (opcode in self.zeropagexopcodes) and (premode == "numbercommax"):
             self.debug(3, "IDENTIFY_ADDRESSMODE (opcode was in self.zeropagexopcodes) and (premode was== numbercommax)")
             self.debug(3, "IDENTIFY_ADDRESSMODE decoded value = 0x%x" % self.decode_value(value))
@@ -1060,16 +1061,33 @@ class asm6502():
             lowbyte = None
             highbyte = None
 
-        offset = -1
-
         # count extra bytes from db, dw, ddw, dqw pseudo-ops now because we need
-        # to leave space for them. Delay parsing the values until pass 3 because we
+        # to leave space for them. Delay parsing the values until pass 2 because we
         # need a symbol table for label look-up
         extrabytes = list()
         if opcode in self.validpseudoops:
             num_extrabytes = self.decode_extra(linenumber, linetext, operand, self.bytes_per[opcode], count=True)
         else:
             num_extrabytes = 0
+
+        # Handle ORG directive
+        if (opcode == "org"):
+            newaddr = self.decode_value(value)
+            if (newaddr != -1):
+                self.address = newaddr & 0x00ffff
+        offset = self.address
+
+        if (opcode_val != None):
+            self.address += 1
+        if (lowbyte != None):
+            self.address += 1
+        if (highbyte != None):
+            self.address += 1
+        self.address += num_extrabytes
+
+        # If there is a label, we now know its address. So store it in the symbol table
+        if (labelstring != None) and (labelstring != ""):
+            self.symbols[labelstring] = offset
 
         tuple = (
         offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment,
@@ -1078,61 +1096,24 @@ class asm6502():
         self.print_text(tuple, pass1=True)
         self.debug(2, "-----------------------")
 
-    # Perform the three passes of the assembly. Optionally retain stuff from
+    # Perform the two passes of the assembly. Optionally retain stuff from
     # previous assembly (if any)
     def assemble(self, lines, clear_lst=True, clear_sym=True, clear_obj=False):
         self.clear_state(clear_lst=clear_lst, clear_sym=clear_sym, clear_obj=clear_obj)
 
-        # Pass1: parse each line for label, opcode, operand and comments
+        # Pass1: parse the source line by line and fill everything in except for
+        # stuff that requires the symbol table
         self.debug(1, "Pass 1")
         for line in lines:
             self.parse_line(line)
-
-        # Pass2: compute the offsets and populate the symbol table
-        self.debug(1, "Pass 2")
-
-        # Default to 0x0000. ORG directive overrides
-        self.address = 0x0000
-
-        # Add the offset to each line by counting the opcodes and operands
-        for i in range(len(self.allstuff)):
-            tuple = self.allstuff[i]
-            (offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value,
-             comment, extrabytes, num_extrabytes, linetext) = tuple
-            # Handle ORG directive
-            if (opcode == "org"):
-                newaddr = self.decode_value(value)
-                if (newaddr != -1):
-                    self.address = newaddr & 0x00ffff
-            offset = self.address
-
-            if (opcode_val != None):
-                self.address += 1
-            if (lowbyte != None):
-                self.address += 1
-            if (highbyte != None):
-                self.address += 1
-            self.address += num_extrabytes
-
-            # If there is a label, we now know its address. So store it in the symbol table
-            if (labelstring != None) and (labelstring != ""):
-                self.symbols[labelstring] = offset
-
-            # these fields in tuple (may) have been updated: offset, so replace tuple
-            tuple = (
-            offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value,
-                comment, extrabytes, num_extrabytes, linetext)
-            self.allstuff[i] = tuple
-            self.print_text(tuple)
-            self.debug(2, "-----------------------")
 
         # Print out the symbol table
         self.debug(1, "Symbol Table")
         for label in self.symbols:
             self.debug(1, f"{label:10s} = ${self.symbols[label]:04X}")
 
-        # Pass 3: Fill in the unknown values from the symbol table
-        self.debug(1, "Pass 3")
+        # Pass 2: fill in the unknown values from the symbol table
+        self.debug(1, "Pass 2")
 
         for i in range(len(self.allstuff)):
             tuple = self.allstuff[i]
