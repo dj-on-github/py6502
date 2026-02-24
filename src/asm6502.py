@@ -236,6 +236,7 @@ class asm6502():
     # names are numbers..
     def identify_addressmode(self, opcode, premode, value, linenumber):
         self.debug(3, f"IDENTIFY_ADDRESSMODE(opcode={opcode} premode={premode} value={value})")
+
         if (opcode in self.implicitopcodes) and (premode == "nothing"):
             return "implicit"
         if (opcode in self.immediateopcodes) and (premode == "immediate"):
@@ -268,10 +269,10 @@ class asm6502():
         if (opcode in self.zeropagexopcodes) and (premode == "numbercommax"):
             self.debug(3, "IDENTIFY_ADDRESSMODE (opcode was in self.zeropagexopcodes) and (premode was== numbercommax)")
             self.debug(3, "IDENTIFY_ADDRESSMODE decoded value = 0x%x" % self.decode_value(value))
-            if (self.decode_value(value) < 256):
+            if (self.decode_value(value) < 256) and (self.decode_value(value) != -1):
                 return "zeropagex"
         if (opcode in self.zeropageyopcodes) and (premode == "numbercommay"):
-            if (self.decode_value(value) < 256):
+            if (self.decode_value(value) < 256) and (self.decode_value(value) != -1):
                 return "zeropagey"
         if (opcode in self.absolutexopcodes) and (premode == "numbercommax"):
             return "absolutex"
@@ -284,7 +285,7 @@ class asm6502():
         if (opcode in self.zeropageindexedindirectyopcodes) and (premode == "bracketedcommay"):
             return "zeropageindexedindirecty"
         if (opcode in self.zeropageindirectopcodes) and (premode == "bracketed"):
-            if (self.decode_value(value) < 256):
+            if (self.decode_value(value) < 256) and (self.decode_value(value) != -1):
                 return "zeropageindirect"
 
         self.debug(2, "IDENTIFY_ADDRESSMODE UNDECIDED")
@@ -463,11 +464,13 @@ class asm6502():
 
 
     def decode_value(self, s):
-        """ s is a string representing a number; return
-        the number. Accept $ @ % as base prefixes else
-        expect decimal
+        """ s is a string representing a number or a symbol; return
+        the number. First check the symbol table, else accept $ @ %
+        as base prefixes else expect decimal. 
         """
-        if (s[0] == '$'):
+        if s in self.symbols:
+            return self.symbols[s]
+        elif (s[0] == '$'):
             return int(s[1:], 16)
         elif (s[0] == '@'):
             return int(s[1:], 8)
@@ -498,7 +501,7 @@ class asm6502():
 
         self.modeswithlowbytevalue = \
             ["immediate", "absolute", "zeropage", "absolutex", "absolutey", \
-             "zeropagex", "zeropagey", "zeropageindexedindirectx", "zeropageindexedindirecty" \
+             "zeropagex", "zeropagey", "zeropageindexedindirectx", "zeropageindexedindirecty", \
                                                                    "absoluteindexedindirect", "zeropageindirect",
              "absoluteindirect"]
         self.modeswithhighbytevalue = \
@@ -1028,8 +1031,29 @@ class asm6502():
         opcode_anycase, operand = self.strip_opcode(mystring, linenumber)
         opcode = self.check_opcode(opcode_anycase, linenumber)
         premode, value = self.identify_addressmodeformat(operand, linenumber)
+
+        # Handle ORG directive
+        if (opcode == "org"):
+            newaddr = self.decode_value(value)
+            if (newaddr != -1):
+                self.address = newaddr & 0x00ffff
+        offset = self.address
+
+        # If there is a label, we now know its address. So store it in the symbol table
+        if (labelstring != None) and (labelstring != ""):
+            self.symbols[labelstring] = offset
+
+        # Now we have:
+        # - all the components of the line
+        # - the start address of the line
+        # - a symbol table that is valid for all backward references
+        # For addressing modes that can be short or long, we can make a correct choice
+        # for all literals and for all backward references. We have to assume that all
+        # forward references require absolute addresses -- which is not a bad guess, since
+        # page 0 is too valuable to run code in!
+
         addressmode = self.identify_addressmode(opcode, premode, value, linenumber)
-        self.debug(3, "PARSE_LINE: opcode=%s  addressmode=%s" % (str(opcode), addressmode))
+        self.debug(3, "PARSE_LINE 1 opcode=%s  addressmode=%s" % (str(opcode), addressmode))
         if (opcode != None) and (addressmode != "UNDECIDED"):
             astring = opcode + addressmode
             self.debug(3, "PARSE_LINE 2 astring=%s" % astring)
@@ -1042,25 +1066,6 @@ class asm6502():
             opcode_val = None
             astring = ""
 
-        if (self.addrmode_length(addressmode) == 0):
-            lowbyte = None
-            highbyte = None
-        elif (self.addrmode_length(addressmode) == 1) and (self.decode_value(value) != -1):
-            lowbyte = self.decode_value(value) & 0x00FF
-            highbyte = None
-        elif (self.addrmode_length(addressmode) == 2) and (self.decode_value(value) != -1):
-            lowbyte = self.decode_value(value) & 0x00FF
-            highbyte = (self.decode_value(value) >> 8) & 0x00FF
-        elif (self.addrmode_length(addressmode) == 1) and (self.decode_value(value) == -1):
-            lowbyte = -1
-            highbyte = None
-        elif (self.addrmode_length(addressmode) == 2) and (self.decode_value(value) == -1):
-            lowbyte = -1
-            highbyte = -1
-        else:
-            lowbyte = None
-            highbyte = None
-
         # count extra bytes from db, dw, ddw, dqw pseudo-ops now because we need
         # to leave space for them. Delay parsing the values until pass 2 because we
         # need a symbol table for label look-up
@@ -1070,24 +1075,17 @@ class asm6502():
         else:
             num_extrabytes = 0
 
-        # Handle ORG directive
-        if (opcode == "org"):
-            newaddr = self.decode_value(value)
-            if (newaddr != -1):
-                self.address = newaddr & 0x00ffff
-        offset = self.address
-
+        lowbyte = None
+        highbyte = None
         if (opcode_val != None):
             self.address += 1
-        if (lowbyte != None):
+        if self.addrmode_length(addressmode) in (1,2):
             self.address += 1
-        if (highbyte != None):
+            lowbyte = -1
+        if self.addrmode_length(addressmode) == 2:
             self.address += 1
+            highbyte = -1
         self.address += num_extrabytes
-
-        # If there is a label, we now know its address. So store it in the symbol table
-        if (labelstring != None) and (labelstring != ""):
-            self.symbols[labelstring] = offset
 
         tuple = (
         offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment,
@@ -1112,7 +1110,7 @@ class asm6502():
         for label in self.symbols:
             self.debug(1, f"{label:10s} = ${self.symbols[label]:04X}")
 
-        # Pass 2: fill in the unknown values from the symbol table
+        # Pass 2: fill in all the operands
         self.debug(1, "Pass 2")
 
         for i in range(len(self.allstuff)):
@@ -1121,27 +1119,27 @@ class asm6502():
              comment, extrabytes, num_extrabytes, linetext) = tuple
 
             if lowbyte == -1:
+                dvalue = self.decode_value(value)
+                if dvalue == -1:
+                    self.warning(linenumber, "", f"bad literal or unresolved reference to label {value}")
                 if addressmode == "relative":
                     # unresolved relative branches
-                    if (value in self.symbols):
-                        destination = self.symbols[value]
+                    if value in self.symbols:
+                        # if dvalue came from a label it is the absolute destination address: convert to
+                        # a signed offset. Otherwise, it's already a signed offset.
+                        # branch is relative to the first byte after the branch instruction;
+                        # "& 0xffff" converts it to 16-bit 2s complement signed
+                        dvalue = (dvalue - (offset + 2)) & 0xffff
+                    if (dvalue & 0xff00 == 0) or (dvalue & 0xff00 == 0xff00):
+                        lowbyte = dvalue & 0xff
                     else:
-                        self.warning(linenumber, "", f"unresolved reference to label {self.symbols}")
-                    start = offset + 2  # Delta is relative to the first byte after the branch instruction
-                    delta = destination - start
-                    lowbyte = delta & 0x00ff
-                    if (delta > 127) or (delta < -128):
-                        self.warning(linenumber, "", "branch can't reach destination, delta is %d" % delta)
+                        self.warning(linenumber, "", f"branch can't reach destination, offset is 0x{dvalue:04X}")
                 elif addressmode in self.modeswithlowbytevalue:
                     # unresolved absolute or zp
-                    if (value in self.symbols):
-                        newvalue = self.symbols[value]
-                        lowbyte = newvalue & 0x00ff
-                    else:
-                        self.warning(linenumber, "", f"unresolved reference to label {self.symbols}")
+                    lowbyte = dvalue & 0x00ff
                     if (highbyte == -1) and (addressmode in self.modeswithhighbytevalue):
                         # unresolved absolute
-                        highbyte = (newvalue >> 8) & 0x00ff
+                        highbyte = (dvalue >> 8) & 0xff
 
             # populate the extrabytes lists, using the requested byte order tracked from stored opcode
             if (opcode == "le"):
