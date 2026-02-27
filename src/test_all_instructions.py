@@ -5,14 +5,10 @@ import sys
 
 def go(debug=0):
     lines = list()
-    lines.append("    ORG $0")
-    lines.append("lab0:")
-    lines.append("    ORG $1")
-    lines.append("lab1:")
-    lines.append("    ORG $fe")
-    lines.append("labfe:")
-    lines.append("    ORG $ff")
-    lines.append("labff:")
+    lines.append("lab0:  EQU 0")
+    lines.append("lab1:  EQU 1")
+    lines.append("labfe: EQU $fe")
+    lines.append("labff: EQU $ff")
     lines.append("    ORG $100")
     lines.append("    ADC #$55	    ")
     lines.append("    ADC $20	        ")
