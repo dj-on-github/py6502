@@ -512,7 +512,7 @@ class asm6502():
             ["db", "dw", "ddw", "dqw"]
 
         self.validdirectives = \
-            ["org", "le", "be"]
+            ["org", "equ", "le", "be"]
 
         self.validopcodes = \
             ["adc", "and", "asl", "bcc", "bcs", "beq", "bit", "bmi", "bne", \
@@ -1033,7 +1033,7 @@ class asm6502():
         premode, value = self.identify_addressmodeformat(operand, linenumber)
 
         # Handle ORG directive
-        if (opcode == "org"):
+        if opcode == "org":
             newaddr = self.decode_value(value)
             if (newaddr != -1):
                 self.address = newaddr & 0x00ffff
@@ -1041,7 +1041,12 @@ class asm6502():
 
         # If there is a label, we now know its address. So store it in the symbol table
         if (labelstring != None) and (labelstring != ""):
-            self.symbols[labelstring] = offset
+            if opcode == "equ":
+                # equate directive: value is explict
+                self.symbols[labelstring] = self.decode_value(value)
+            else:
+                # value is implicit
+                self.symbols[labelstring] = offset
 
         # Now we have:
         # - all the components of the line

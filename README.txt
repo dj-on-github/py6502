@@ -114,6 +114,7 @@ Pseudo-ops and Directives
 
 ; Comment
 ORG address - Set the current assembly location
+EQU - Define a label and its value (see "Labels" below)
 DB - Generate 8-bit values
 DW - Generate 16-bit values
 DDW - Generate 32-bit values
@@ -151,10 +152,17 @@ The prefixes $, @, % can also be used with numeric arguments to instructions
 Labels
 ------
 
-A word followed by a colon makes a label. It can be on its own line, or in front of an instruction or directive.
+A word followed by a colon makes a label. It can be on its own line, or in front of an instruction or directive. Examples:
 
-alabel:                 ; A label on its own
-anotherlabel: STA #$10  ; A label with an instruction
+              ORG $100
+alabel:                 ; A label on its own - value is $100 because of previous ORG
+              NOP       ; 1 byte op-code
+anotherlabel: STA #$10  ; A label with an instruction - value is $101
+yalabel:      EQU $1234 ; A label with a value - value is $1234
+loop:         STA #$20  ; A label with an instruction - value is $103 because "STA #$10" occupies 2 bytes
+
+An EQU directive explicitly declares the value of a label. A label without an EQU takes the implicit address where it occurs. All EQU directives must be resolved in pass1. A consequence of this is that the value of an EQU can be a backward symbolic reference
+but cannot be a forward symbolic reference.
 
 Any address or 16 bit data field can be replaced with a declared label and the label address will be inserted there.
 In a DW declaration you need to prefix a label with & to tell the assembler it's a label. Examples:
