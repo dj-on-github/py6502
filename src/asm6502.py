@@ -29,28 +29,31 @@ class asm6502():
 
     def clear_state(self, clear_lst=True, clear_sym=True, clear_obj=True):
         self.text_of_lines = list()  # of strings
+        self.address = 0 # ORG overrides
         if clear_lst:
-            self.listing = list()  # parsed lines (symbol, opcode, addrmode, value
+            self.listing = list()  # parsed lines (symbol, opcode, addrmode, value)
         if clear_sym:
             self.symbols = dict()  # of (name,line#)
         if clear_obj:
-            self.object_code = list()  # 64 K entries to cover whole memory map
-            for i in range(0, 65536):
-                self.object_code.append(-1)  # -1 indicate location not populated
-
-        self.labeldict = dict()
-        self.labellist = list()
-
-        self.opcodelist = list()
-        self.opcodedict = dict()
-
-        self.addressmodes = dict()
-        self.addressmmodelist = list()
+            # A map of which locations contain op-codes: used by debugger.py
+            # None - initial value/non instructions
+            # nn   - +ve number: op-code byte
+            # -1   - 1st argument
+            # -2   - 2nd argument
+            # This makes it easy for an interactive disassembler/debugger
+            # to disassemble backwards from the current position
+            self.instruction_map = [None] * 65536
+            # A map of the 64K memory map. -1 means not populated
+            self.object_code = [-1] * 65536
 
         self.littleendian = True  # Use le and be directives to change this
 
         self.allstuff = list()
         self.line = 1
+
+    def debug(self, level=0, astring="No String Given"):
+        if (level <= self.debuglevel):
+            print("   DEBUG(%d):%s" % (level, astring))
 
     def info(self, linenumber, text):
         self.debug(1, "INFO: Line %d: %s" % (linenumber, text))
@@ -64,18 +67,12 @@ class asm6502():
         print("  " + linetext)
 
     def strip_comments(self, thestring):
-        self.debug(3, "string passed to strip_comments()=%s" % thestring)
+        self.debug(3, "STRIP_COMMENTS %s" % thestring)
         position = thestring.find(';')
         if (position == -1):
             return (thestring, "")
         else:
             return (thestring[:position].rstrip(), thestring[position:].rstrip())
-
-    def debug(self, level=0, astring="No String Given"):
-        if (level > self.debuglevel):
-            pass
-        else:
-            print("   DEBUG(%d):%s" % (level, astring))
 
     # find a label at the front. Strip it and return the symbol
     def strip_label(self, thestring, linenumber):
@@ -87,16 +84,12 @@ class asm6502():
             returnstr = thestring[position + 1:].strip()
             position = labelstr.find(' ')
             if (position == -1):
-                self.labeldict[labelstr] = linenumber
-                self.labellist.append((linenumber, labelstr))
                 self.debug(2, "Line %d Label %s found at line %d" % (linenumber, labelstr, linenumber))
                 return (labelstr, returnstr)
             else:
                 labelstr = labelstr[:position]
                 self.warning(linenumber=linenumber, linetext=thestring,
                              text="More than one thing in the label field. Ignoring everything between the first space and the colon")
-                self.labellist.append((linenum, labelstr))
-                self.labeldict[labelstr] = linenum
                 self.info(linenumber, text="Label %s found at line %d" % (labelstr, linenumber))
                 return (labelstr, returnstr)
 
@@ -140,15 +133,12 @@ class asm6502():
             self.debug(3, "check_opcode returning null")
             return None
         elif opcode in self.validopcodes:
-            self.opcodelist.append((linenumber, opcode))
             self.debug(3, "check_opcode found %s in validopcodes" % opcode)
             return opcode
         elif opcode in self.validpseudoops:
-            self.opcodelist.append((linenumber, opcode))
             self.debug(3, "check_opcode found %s in validpseudoops" % opcode)
             return opcode
         elif opcode in self.validdirectives:
-            self.opcodelist.append((linenumber, opcode))
             self.debug(3, "check_opcode found %s in validdirectives" % opcode)
             return opcode
         else:
@@ -157,13 +147,13 @@ class asm6502():
             return None
 
     def identify_addressmodeformat(self, remainderstr, linenumber):
+        self.debug(3, f"IDENTIFY_ADDRESSMODEFORMAT(str={remainderstr} line={linenumber})")
         # remove all whitespace
         thestring = remainderstr.replace(" ", "")
         if (thestring == ""):
             premode = "nothing"
             value = ""
         elif thestring[0] == "#":
-            # It's immediate
             premode = "immediate"
             value = thestring[1:]
         elif (thestring == "a") or (thestring == "A"):
@@ -219,7 +209,6 @@ class asm6502():
             premode = "nothing"
             value = ""
 
-        self.debug(2, "premode = %s, value = %s" % (premode, value))
         # We've classified the basic formats in premode
         # some formats mean different things with different instructions
         # E.G. a number is an offset with a branch but absolute with a load
@@ -246,6 +235,8 @@ class asm6502():
     #
     # names are numbers..
     def identify_addressmode(self, opcode, premode, value, linenumber):
+        self.debug(3, f"IDENTIFY_ADDRESSMODE(opcode={opcode} premode={premode} value={value})")
+
         if (opcode in self.implicitopcodes) and (premode == "nothing"):
             return "implicit"
         if (opcode in self.immediateopcodes) and (premode == "immediate"):
@@ -272,16 +263,16 @@ class asm6502():
             return "absolute"
         self.debug(3, "IDENTIFY_ADDRESSMODE for zeropagex opcode=%s premode=%s" % (opcode, premode))
         if (opcode in self.zeropagexopcodes):
-            self.debug(3, "opcode was in zeropagexopcodes")
+            self.debug(3, "opcode     in zeropagexopcodes")
         else:
-            self.debug(3, "opcode wasnt in zeropagexopcodes")
+            self.debug(3, "opcode not in zeropagexopcodes")
         if (opcode in self.zeropagexopcodes) and (premode == "numbercommax"):
             self.debug(3, "IDENTIFY_ADDRESSMODE (opcode was in self.zeropagexopcodes) and (premode was== numbercommax)")
             self.debug(3, "IDENTIFY_ADDRESSMODE decoded value = 0x%x" % self.decode_value(value))
-            if (self.decode_value(value) < 256):
+            if (self.decode_value(value) < 256) and (self.decode_value(value) != -1):
                 return "zeropagex"
         if (opcode in self.zeropageyopcodes) and (premode == "numbercommay"):
-            if (self.decode_value(value) < 256):
+            if (self.decode_value(value) < 256) and (self.decode_value(value) != -1):
                 return "zeropagey"
         if (opcode in self.absolutexopcodes) and (premode == "numbercommax"):
             return "absolutex"
@@ -294,11 +285,10 @@ class asm6502():
         if (opcode in self.zeropageindexedindirectyopcodes) and (premode == "bracketedcommay"):
             return "zeropageindexedindirecty"
         if (opcode in self.zeropageindirectopcodes) and (premode == "bracketed"):
-            if (self.decode_value(value) < 256):
+            if (self.decode_value(value) < 256) and (self.decode_value(value) != -1):
                 return "zeropageindirect"
 
-        self.debug(2, "INFO: GOT TO END OF IDENTIFY_ADDRESSMODE: Line %d opcode:%s premode:%s" % (
-        linenumber, opcode, premode))
+        self.debug(2, "IDENTIFY_ADDRESSMODE UNDECIDED")
         return "UNDECIDED"
 
     def decode_extra(self, linenumber, linetext, s, bytes_per, count=False):
@@ -331,7 +321,7 @@ class asm6502():
         values = list()
         val = ""
         for c in s:
-            self.debug(3, f"FSM in state {state} with val {val} and processing {c}")
+            self.debug(4, f"FSM in state {state} with val {val} and processing {c}")
             if state == "IDLE" or state == "DELIM":
                 # distinguish IDLE/DELIM because ending a line in IDLE is OK
                 # (trailing spaces?) but ending in DELIM is an error
@@ -474,20 +464,22 @@ class asm6502():
 
 
     def decode_value(self, s):
-        if (s[0] == '$'):
-            ns = int(s[1:], 16)
-            return ns
+        """ s is a string representing a number or a symbol; return
+        the number. First check the symbol table, else accept $ @ %
+        as base prefixes else expect decimal. 
+        """
+        if s in self.symbols:
+            return self.symbols[s]
+        elif (s[0] == '$'):
+            return int(s[1:], 16)
         elif (s[0] == '@'):
-            ns = int(s[1:], 8)
-            return ns
+            return int(s[1:], 8)
         elif (s[0] == '%'):
-            ns = int(s[1:], 2)
-            return ns
+            return int(s[1:], 2)
         elif (s[0] in self.decimal_digits):
-            ns = int(s)
-            return ns
+            return int(s)
         else:
-            return (-1)
+            return -1
 
     #   Address mode        format                    name applied
     # implicit                                       ~ "implicit"
@@ -509,7 +501,7 @@ class asm6502():
 
         self.modeswithlowbytevalue = \
             ["immediate", "absolute", "zeropage", "absolutex", "absolutey", \
-             "zeropagex", "zeropagey", "zeropageindexedindirectx", "zeropageindexedindirecty" \
+             "zeropagex", "zeropagey", "zeropageindexedindirectx", "zeropageindexedindirecty", \
                                                                    "absoluteindexedindirect", "zeropageindirect",
              "absoluteindirect"]
         self.modeswithhighbytevalue = \
@@ -520,7 +512,7 @@ class asm6502():
             ["db", "dw", "ddw", "dqw"]
 
         self.validdirectives = \
-            ["org", "le", "be"]
+            ["org", "equ", "le", "be"]
 
         self.validopcodes = \
             ["adc", "and", "asl", "bcc", "bcs", "beq", "bit", "bmi", "bne", \
@@ -552,24 +544,25 @@ class asm6502():
 
         self.absoluteopcodes = \
             ["adc", "and", "asl", "bit", "cmp", "cpx", "cpy", "dec", "eor", "inc", \
-             "jmp", "jsr", "lda", "ldx", "ldy", "lsr", "ora", "rol", "ror", "sbc", \
-             "sta", "stx", "sty", "stz", "trb", "tsb"]
-
-        self.absolutexopcodes = \
-            ["adc", "and", "asl", "bit", "cmp", "dec", "eor", "inc", \
-             "lda", "lsr", "ora", "rol", "ror", "sbc", \
-             "sta", "stz", "ldy"]
-
-        self.absoluteyopcodes = \
-            ["adc", "and", "cmp", "eor", \
-             "lda", "ldx", "ora", "sbc", "sta"]
+             "lda", "ldx", "ldy", "lsr", "ora", "rol", "ror", "sbc", "sta", "stx", \
+             "sty", "stz", "trb", "tsb", "jmp", "jsr"]
 
         self.zeropagexopcodes = \
-            ["adc", "and", "cmp", "eor", "lda", "dec", "bit", "asl", "ldy", \
-             "ora", "sbc", "sta", "sty", "ror", "rol", "lsr", "inc", "stz"]
+            ["adc", "and", "asl", "bit", "cmp",               "dec", "eor", "inc", \
+             "lda",        "ldy", "lsr", "ora", "rol", "ror", "sbc", "sta",        \
+             "sty", "stz"]
+
+        self.absolutexopcodes = \
+            ["adc", "and", "asl", "bit", "cmp",               "dec", "eor", "inc", \
+             "lda",               "lsr", "ora", "rol", "ror", "sbc", "sta",        \
+             "ldy", "stz"]
 
         self.zeropageyopcodes = \
             ["ldx", "stx"]
+
+        self.absoluteyopcodes = \
+            ["adc", "and",               "cmp",                      "eor",        \
+             "lda",                      "ora",               "sbc", "sta", "ldx"]
 
         self.relativeopcodes = \
             ["bmi", "bne", "bpl", "bra", "bvc", "bvs", "bcc", "bcs", "beq"]
@@ -955,66 +948,16 @@ class asm6502():
             return 1
         if addrmode == "absoluteindirect":
             return 2
+        # end up here if addrmode is UNDECIDED and then return None
 
-    def pass1text(self, thetuple):
-        (offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment,
-         extrabytes, num_extrabytes, linetext) = thetuple
-        a = ("%d" % linenumber).ljust(4)
-        if (labelstring != None):
-            b = (": %s" % labelstring).ljust(10)
-        else:
-            b = "          "
-
-        if (opcode_val == None):
-            c = "   "
-        else:
-            if (opcode_val > -1):
-                c = "%02X " % opcode_val
-            else:
-                c = "?? "
-
-        if (lowbyte == None):
-            d = "   "
-        else:
-            if (lowbyte > -1):
-                d = "%02X " % lowbyte
-            else:
-                d = "?? "
-
-        if (highbyte == None):
-            e = "   "
-        else:
-            if (highbyte > -1):
-                e = "%02X " % highbyte
-            else:
-                e = "?? "
-
-        # Print the opcode in 4 spaces
-        if (opcode == None):
-            f = "    "
-        else:
-            f = opcode.ljust(4)
-
-        # Either print the operand in 10 spaces or print 10 spaces
-        # when there is no operand
-        if (operand == None):
-            g = "          "
-        else:
-            if (len(operand) > 0):
-                g = operand.ljust(10)
-            else:
-                g = "          "
-
-        h = comment
-        astring = a + b + c + d + e + f + g + h
-        self.debug(1, astring)
-        return astring
-
-    def pass2text(self, thetuple):
-        (offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment,
+    def print_text(self, thetuple, pass1=False):
+        (addr, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment,
          extrabytes, num_extrabytes, linetext) = thetuple
         a = ("%d " % linenumber).ljust(5)
-        aa = ("%04X " % offset)
+        if pass1:
+            aa = "???? "
+        else:
+            aa = ("%04X " % addr)
 
         if (labelstring != None) and (labelstring != ""):
             b = (": %s:" % labelstring).ljust(10)
@@ -1023,27 +966,24 @@ class asm6502():
 
         if (opcode_val == None):
             c = "   "
+        elif (opcode_val > -1):
+            c = "%02X " % opcode_val
         else:
-            if (opcode_val > -1):
-                c = "%02X " % opcode_val
-            else:
-                c = "?? "
+            c = "?? "
 
         if (lowbyte == None):
             d = "   "
+        elif (lowbyte > -1):
+            d = "%02X " % lowbyte
         else:
-            if (lowbyte > -1):
-                d = "%02X " % lowbyte
-            else:
-                d = "?? "
+            d = "?? "
 
         if (highbyte == None):
             e = "   "
+        elif (highbyte > -1):
+            e = "%02X " % highbyte
         else:
-            if (highbyte > -1):
-                e = "%02X " % highbyte
-            else:
-                e = "?? "
+            e = "?? "
 
         # Print the opcode in 4 spaces
         if (opcode == None):
@@ -1053,21 +993,18 @@ class asm6502():
 
         if (operand == None):
             g = "          "
+        elif (len(operand) > 0):
+            g = operand.ljust(10)
         else:
-            if (len(operand) > 0):
-                g = operand.ljust(10)
-            else:
-                g = "          "
+            g = "          "
 
-        h = comment
-
-        astring = a + aa + b + c + d + e + f + g + h
+        astring = a + aa + b + c + d + e + f + g + comment
         self.debug(1, astring)
         self.debug(2, thetuple)
 
-        # If there are extra bytes from db, dw, ddq, dqw
+        # If there are bytes from db, dw, ddq, dqw
         # print the resulting hex bytes on the next line.
-        if (extrabytes != None) and (len(extrabytes) > 1):
+        if (extrabytes != None) and (len(extrabytes) > 0):
             hexchars = ""
             index = 0
             for index in range(0, len(extrabytes) - 1):
@@ -1094,13 +1031,39 @@ class asm6502():
         opcode_anycase, operand = self.strip_opcode(mystring, linenumber)
         opcode = self.check_opcode(opcode_anycase, linenumber)
         premode, value = self.identify_addressmodeformat(operand, linenumber)
+
+        # Handle ORG directive
+        if opcode == "org":
+            newaddr = self.decode_value(value)
+            if (newaddr != -1):
+                self.address = newaddr & 0x00ffff
+        offset = self.address
+
+        # If there is a label, we now know its address. So store it in the symbol table
+        if (labelstring != None) and (labelstring != ""):
+            if opcode == "equ":
+                # equate directive: value is explict
+                self.symbols[labelstring] = self.decode_value(value)
+            else:
+                # value is implicit
+                self.symbols[labelstring] = offset
+
+        # Now we have:
+        # - all the components of the line
+        # - the start address of the line
+        # - a symbol table that is valid for all backward references
+        # For addressing modes that can be short or long, we can make a correct choice
+        # for all literals and for all backward references. We have to assume that all
+        # forward references require absolute addresses -- which is not a bad guess, since
+        # page 0 is too valuable to run code in!
+
         addressmode = self.identify_addressmode(opcode, premode, value, linenumber)
-        self.debug(3, "PARSE LINE: opcode=%s  addressmode=%s" % (str(opcode), addressmode))
+        self.debug(3, "PARSE_LINE 1 opcode=%s  addressmode=%s" % (str(opcode), addressmode))
         if (opcode != None) and (addressmode != "UNDECIDED"):
             astring = opcode + addressmode
-            self.debug(3, "PARSE LINE 2 astring=%s" % astring)
+            self.debug(3, "PARSE_LINE 2 astring=%s" % astring)
             if astring in self.hexmap:
-                self.debug(3, "PARSE LINE 3 astring=%s  self.hexmap[astring]=0x%x" % (astring, self.hexmap[astring]))
+                self.debug(3, "PARSE_LINE 3 astring=%s  self.hexmap[astring]=0x%x" % (astring, self.hexmap[astring]))
                 opcode_val = self.hexmap[astring]
             else:
                 opcode_val = None
@@ -1108,163 +1071,104 @@ class asm6502():
             opcode_val = None
             astring = ""
 
-        if (self.addrmode_length(addressmode) == 0):
-            lowbyte = None
-            highbyte = None
-        elif (self.addrmode_length(addressmode) == 1) and (self.decode_value(value) != -1):
-            lowbyte = self.decode_value(value) & 0x00FF
-            highbyte = None
-        elif (self.addrmode_length(addressmode) == 2) and (self.decode_value(value) != -1):
-            lowbyte = self.decode_value(value) & 0x00FF
-            highbyte = ((self.decode_value(value) & 0xFF00) >> 8) & 0x00FF
-        elif (self.addrmode_length(addressmode) == 1) and (self.decode_value(value) == -1):
-            lowbyte = -1
-            highbyte = None
-        elif (self.addrmode_length(addressmode) == 2) and (self.decode_value(value) == -1):
-            lowbyte = -1
-            highbyte = -1
-        else:
-            lowbyte = None
-            highbyte = None
-        offset = -1
-
-        # Handle switches between little endian and big endian
-        if (opcode == "le"):
-            self.littleendian = True
-        if (opcode == "be"):
-            self.littleendian = False
-
         # count extra bytes from db, dw, ddw, dqw pseudo-ops now because we need
-        # to leave space for them. Delay parsing the values until pass 3 because we
+        # to leave space for them. Delay parsing the values until pass 2 because we
         # need a symbol table for label look-up
         extrabytes = list()
         if opcode in self.validpseudoops:
             num_extrabytes = self.decode_extra(linenumber, linetext, operand, self.bytes_per[opcode], count=True)
         else:
-            num_extrabytes = None
+            num_extrabytes = 0
 
-        thetuple = (
+        lowbyte = None
+        highbyte = None
+        if (opcode_val != None):
+            self.address += 1
+        if self.addrmode_length(addressmode) in (1,2):
+            self.address += 1
+            lowbyte = -1
+        if self.addrmode_length(addressmode) == 2:
+            self.address += 1
+            highbyte = -1
+        self.address += num_extrabytes
+
+        tuple = (
         offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value, comment,
-        extrabytes, num_extrabytes, linetext)
-        self.allstuff.append(thetuple)
-        self.pass1text(thetuple)
-
-        self.debug(2, "addressmode = %s" % addressmode)
-        self.debug(2, str(self.allstuff[linenumber - 1]))
+            extrabytes, num_extrabytes, linetext)
+        self.allstuff.append(tuple)
+        self.print_text(tuple, pass1=True)
         self.debug(2, "-----------------------")
 
-    # Perform the three passes of the assembly. Optionally retain stuff from
+    # Perform the two passes of the assembly. Optionally retain stuff from
     # previous assembly (if any)
     def assemble(self, lines, clear_lst=True, clear_sym=True, clear_obj=False):
         self.clear_state(clear_lst=clear_lst, clear_sym=clear_sym, clear_obj=clear_obj)
 
-        # First pass, parse each line for label, opcode, operand and comments
-        self.debug(1, "First Pass")
+        # Pass1: parse the source line by line and fill everything in except for
+        # stuff that requires the symbol table
+        self.debug(1, "Pass 1")
         for line in lines:
             self.parse_line(line)
-
-        # Second pass, compute the offsets and populate the symbol table
-        self.debug(1, "Second Pass")
-
-        # Default to 0x0000. ORG directive overrides
-        self.address = 0x0000
-
-        # Add the offset to each line by counting the opcodes and operands
-        for i in range(len(self.allstuff)):
-            tuple = self.allstuff[i]
-            (offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value,
-             comment, extrabytes, num_extrabytes, linetext) = tuple
-            # Handle ORG directive
-            if (opcode == "org"):
-                newaddr = self.decode_value(value)
-                if (newaddr != -1):
-                    self.address = newaddr & 0x00ffff
-            offset = self.address
-
-            if (opcode_val != None):
-                self.address += 1
-            if (lowbyte != None):
-                self.address += 1
-            if (highbyte != None):
-                self.address += 1
-            # self.address += len(extrabytes)
-            if type(num_extrabytes) == int:
-                self.address += num_extrabytes
-
-            # If there is a label, we now know its address. So store it in the symbol table
-            if (labelstring != None) and (labelstring != ""):
-                self.symbols[labelstring] = offset
-            tuple = (
-            offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value,
-            comment, extrabytes, num_extrabytes, linetext)
-            self.allstuff[i] = tuple
-            self.pass2text(tuple)
 
         # Print out the symbol table
         self.debug(1, "Symbol Table")
         for label in self.symbols:
-            offset = self.symbols[label]
-            astring = (("%s" % label).ljust(10)) + (" = " + "$%04X" % offset)
-            self.debug(1, astring)
+            self.debug(1, f"{label:10s} = ${self.symbols[label]:04X}")
 
-        # Third pass
-        # Go through filling in the unknown values from the symbol table
-        self.debug(1, "Third Pass")
-        self.instruction_map = [None] * 65536  # A map for where the instructions are so the debugger can know
-        # where the start byte of real instructions are.
-        # The opcode is entered in the location
-        # non instruction locations are set to None.
+        # Pass 2: fill in all the operands
+        self.debug(1, "Pass 2")
 
         for i in range(len(self.allstuff)):
             tuple = self.allstuff[i]
             (offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value,
              comment, extrabytes, num_extrabytes, linetext) = tuple
 
-            # Compute the offset for relative branches
-            if (lowbyte == -1) and (addressmode == "relative"):
-                destination = self.symbols[value]
-                start = offset + 2  # Delta is relative to the first byte after the branch instruction
-                delta = destination - start
-                lowbyte = delta & 0x00ff
-                if (delta > 127) or (delta < -128):
-                    self.warning(linenumber, "", "branch can't reach destination, delta is %d" % delta)
-            elif (lowbyte == -1) and (
-                (addressmode in self.modeswithlowbytevalue) or (addressmode in self.modeswithhighbytevalue)):
-                if (value in self.symbols):
-                    newvalue = self.symbols[value]
-                    lowbyte = newvalue & 0x00ff
-                if (highbyte == -1) and (addressmode in self.modeswithhighbytevalue):
-                    if (value in self.symbols):
-                        newvalue = self.symbols[value]
-                        highbyte = ((newvalue & 0xff00) >> 8) & 0x00ff
+            if lowbyte == -1:
+                dvalue = self.decode_value(value)
+                if dvalue == -1:
+                    self.warning(linenumber, "", f"bad literal or unresolved reference to label {value}")
+                if addressmode == "relative":
+                    # unresolved relative branches
+                    if value in self.symbols:
+                        # if dvalue came from a label it is the absolute destination address: convert to
+                        # a signed offset. Otherwise, it's already a signed offset.
+                        # branch is relative to the first byte after the branch instruction;
+                        # "& 0xffff" converts it to 16-bit 2s complement signed
+                        dvalue = (dvalue - (offset + 2)) & 0xffff
+                    if (dvalue & 0xff00 == 0) or (dvalue & 0xff00 == 0xff00):
+                        lowbyte = dvalue & 0xff
+                    else:
+                        self.warning(linenumber, "", f"branch can't reach destination, offset is 0x{dvalue:04X}")
+                elif addressmode in self.modeswithlowbytevalue:
+                    # unresolved absolute or zp
+                    lowbyte = dvalue & 0x00ff
+                    if (highbyte == -1) and (addressmode in self.modeswithhighbytevalue):
+                        # unresolved absolute
+                        highbyte = (dvalue >> 8) & 0xff
 
-            # populate the extrabytes lists
+            # populate the extrabytes lists, using the requested byte order tracked from stored opcode
+            if (opcode == "le"):
+                self.littleendian = True
+            if (opcode == "be"):
+                self.littleendian = False
             if (opcode in self.validpseudoops) and (operand != None) and (len(operand) > 0):
                 extrabytes = self.decode_extra(linenumber, linetext, operand, self.bytes_per[opcode], count=False)
 
+            # these fields in tuple (may) have been updated: lowbyte, highbyte, extrabytes so replace tuple
             tuple = (
             offset, linenumber, labelstring, opcode_val, lowbyte, highbyte, opcode, operand, addressmode, value,
-            comment, extrabytes, num_extrabytes, linetext)
+                comment, extrabytes, num_extrabytes, linetext)
             self.allstuff[i] = tuple
-            line = self.pass2text(tuple)
+            line = self.print_text(tuple)
             self.listing.append(line)
 
             # Fill in the instruction map
-            # This makes it easy for an interactive disassembler to
-            # know what is instruction code and what is data.
-            # By signaling which are operand bytes, it's easy to
-            # disassemble backwards from the current position
-
-            #   None                    = Not an instruction or operand
-            #   positive numbers < 256  = an opcode
-            #   -1                      = first operand byte
-            #   -2                      = second operand bytecount
             if opcode_val != None:
-                self.instruction_map[offset] = opcode_val
+                self.instruction_map[offset] = opcode_val  # opcode byte
                 if self.addrmode_length(addressmode) > 0:
-                    self.instruction_map[offset + 1] = -1  # -1 signals the first operand byte
+                    self.instruction_map[offset + 1] = -1  # signals the first operand byte
                 if self.addrmode_length(addressmode) > 1:
-                    self.instruction_map[offset + 2] = -2  # -2 signals the second operand byte
+                    self.instruction_map[offset + 2] = -2  # signals the second operand byte
 
             # write generated bytes to object code map
             addr = offset

@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 
 from asm6502 import asm6502
+import sys
 
 def go(debug=0):
     lines = list()
+    lines.append("lab0:  EQU 0")
+    lines.append("lab1:  EQU 1")
+    lines.append("labfe: EQU $fe")
+    lines.append("labff: EQU $ff")
     lines.append("    ORG $100")
     lines.append("    ADC #$55	    ")
     lines.append("    ADC $20	        ")
@@ -205,11 +210,12 @@ def go(debug=0):
     lines.append("label:")
     lines.append("       nop")
     lines.append("       org $3000")
+    lines.append("val:   db 42")
     lines.append("vals:  db @10,$aa, 8 ,$cc,$dd")
     lines.append("       be")
     lines.append("       dw $1020,$3040")
     lines.append("       le")
-    lines.append("       dw &label,&end")
+    lines.append("       dw &label,&far")
     lines.append('       db "hello world"')
     lines.append('       db $0d, $0d, "some text", $0d, %00001101, @72')
     lines.append('       dw $0d, $0d, "some text", $0d, %00001101, @72;padded')
@@ -223,9 +229,28 @@ def go(debug=0):
     lines.append("       dqw $1020304050607080, $A0B0C0D0E0F00010")
     lines.append("       adc start")
     lines.append("       adc ($40)")
-    lines.append("end:   bpl vals2")
+    lines.append("far:   bpl vals2")
     lines.append("       db $aa,$bb,$cc,$dd")
     lines.append("       nop")
+    # Test that correct addressing mode is selected: zp where possible, absolute otherwise
+    lines.append("bingo:  lda lab0      ; resolved in P1 and in zp: uses zp")
+    lines.append("        lda 0         ; in zp: uses zp")
+    lines.append("        lda $1000     ; uses absolute")
+    lines.append("        lda far0      ; unresolved in P1: uses absolute")
+    lines.append("")
+    lines.append("        ora lab1      ; resolved in P1 and in zp: uses zp")
+    lines.append("        ora 1         ; in zp: uses zp")
+    lines.append("        ora $2001     ; uses absolute")
+    lines.append("        ora far1      ; unresolved in P1: uses absolute")
+    lines.append("")
+    lines.append("        ora labff,x   ; resolved in P1 and in zp: uses zp")
+    lines.append("        ora bingo,x   ; resolved in P1 but not in zp: uses absolute")
+    lines.append("        ora 3,x       ; in zp: uses zp")
+    lines.append("        ora $2000,x   ; uses absolute")
+    lines.append("        ora far2,x    ; unresolved in P1: uses absolute")
+    lines.append("far0:   nop")
+    lines.append("far1:   nop")
+    lines.append("far2:")
 
     a = asm6502(debug=debug)
     (listingtext,symboltext) = a.assemble(lines)
@@ -237,4 +262,14 @@ def go(debug=0):
         print(line)
 
     a.print_object_code()
+
+    with open('test_all_instructions.lst', 'w') as sys.stdout:
+        for line in listingtext:
+            print(line)
+    sys.stdout = sys.__stdout__
+
+    with open('test_all_instructions.hexdump', 'w') as sys.stdout:
+        a.print_object_code(canonical=True)
+    sys.stdout = sys.__stdout__
+
 go()
