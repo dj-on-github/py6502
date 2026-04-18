@@ -159,20 +159,20 @@ class asm6502():
         elif (thestring == "a") or (thestring == "A"):
             premode = "accumulator"
             value = ""
-        elif re.search("""^\((.*),[xX]\)$""", thestring):
+        elif re.search(r"""^\((.*),[xX]\)$""", thestring):
             premode = "bracketedindexedx"
-            b = re.search("""^\((.*),[xX]\)$""", thestring)
+            b = re.search(r"""^\((.*),[xX]\)$""", thestring)
             value = b.group(1)
-        elif re.search("""^\((.*)\),[yY]$""", thestring):
+        elif re.search(r"""^\((.*)\),[yY]$""", thestring):
             premode = "bracketedcommay"
-            b = re.search("""^\((.*)\),[yY]$""", thestring)
+            b = re.search(r"""^\((.*)\),[yY]$""", thestring)
             value = b.group(1)
         elif re.search("""^(.*),[xX]$""", thestring):
-            b = re.search("""^(.*),[xX]$""", thestring)
+            b = re.search(r"""^(.*),[xX]$""", thestring)
             value = b.group(1)
             premode = "numbercommax"
-        elif re.search("""^(.*),[yY]$""", thestring):
-            b = re.search("""^(.*),[yY]$""", thestring)
+        elif re.search(r"""^(.*),[yY]$""", thestring):
+            b = re.search(r"""^(.*),[yY]$""", thestring)
             value = b.group(1)
             premode = "numbercommay"
         elif (thestring[0] == '$') or (thestring[0] == '@') \
@@ -187,15 +187,15 @@ class asm6502():
         elif (thestring[0] == "+") or (thestring[0] == "-"):
             premode = "offset"
             value = thestring
-        elif re.search("""^\((.*),[xX]\)$""", thestring):
+        elif re.search(r"""^\((.*),[xX]\)$""", thestring):
             premode = "bracketedindexedx"
-            b = re.search("""^\((.*),[xX]\)$""", thestring)
+            b = re.search(r"""^\((.*),[xX]\)$""", thestring)
             value = b.group(1)
-        elif re.search("""^\((.*)\),[yY]$""", thestring):
+        elif re.search(r"""^\((.*)\),[yY]$""", thestring):
             premode = "bracketedcommay"
-            b = re.search("""^\((.*)\),[yY]$""", thestring)
+            b = re.search(r"""^\((.*)\),[yY]$""", thestring)
             value = b.group(1)
-        elif re.search("""^\(.*\)$""", thestring):
+        elif re.search(r"""^\(.*\)$""", thestring):
             premode = "bracketed"
             value = thestring[1:-1]
         elif thestring[0] in self.letters:
