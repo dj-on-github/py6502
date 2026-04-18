@@ -56,16 +56,17 @@ from asm6502 import asm6502
 The output looks like this:
         LISTING
         1    0000 :                                
-        2    0100 :                  ORG $100      
+        2    0100 :                  org $100      
         3    0100 : start:                         
-        4    0100 :         A9 10    LDA #$10      
-        5    0102 :         A2 00    LDX #$00      
+        4    0100 :         A9 10    lda #$10      
+        5    0102 :         A2 00    ldx #$00      
         6    0104 : loop:                          
-        7    0104 :         9D 00 10 STA $1000,x   
-        8    0107 :         E8       INX           
-        9    0108 :         E9 01    SBC #$01      
-        10   010A :         10 FA    BPL loop      
-        11   010C :         60       RTS
+        7    0104 :         9D 00 10 sta $1000,x   
+        8    0107 :         E8       inx           
+        9    0108 :         E9 01    sbc #$01      
+        10   010A :         10 F8    bpl loop      
+        11   010C :         60       rts           
+        12   010D :   
         
         SYMBOL TABLE
         start      = $0100
@@ -73,7 +74,7 @@ The output looks like this:
         
         OBJECT CODE
         *
-        0100: A9 10 A2 00 9D 00 10 E8 E9 01 10 FA 60
+        0100: A9 10 A2 00 9D 00 10 E8 E9 01 10 F8 60         
         *
 
 The Listing
