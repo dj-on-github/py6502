@@ -336,6 +336,7 @@ class sim6502(object):
 
     def nmi(self):
         # Read the NMI vector
+        self.set_i(True)
         lowaddr = self.memory_map.Read(0xfffa)
         highaddr = self.memory_map.Read(0xfffb)
         if (lowaddr != None) and (lowaddr > -1) and (highaddr != None) and (highaddr > -1):
@@ -344,30 +345,37 @@ class sim6502(object):
             return False
 
         # push PC and status on stack
-        self.memory_map.Write(self.sp, (self.pc >> 8) & 0xff)
-        self.memory_map.Write(self.sp - 1, self.pc & 0xff)
+        self.memory_map.Write(0x100 + self.sp, (self.pc >> 8) & 0xff)
+        self.memory_map.Write(0x100 + self.sp - 1, self.pc & 0xff)
         # TODO: does this actually set this flag before pushing to the stack?
-        self.memory_map.Write(self.sp - 2, self.cc | Flags.UNUSED)
-        self.sp -= 3
+        self.memory_map.Write(0x100 + self.sp - 2, self.cc | Flags.UNUSED)
+        if (self.sp > 2):
+            self.sp -= 3
+        else:
+            self.sp = self.sp + 0x100 - 3
 
         # Set PC to the NMI vector
         self.pc = address
         return True
 
     def irq(self):
+        self.set_i(True)
         # Read the IRQ vector
-        lowaddr = self.memory_map.Read(0xfffa)
-        highaddr = self.memory_map.Read(0xfffb)
+        lowaddr = self.memory_map.Read(0xfffe)
+        highaddr = self.memory_map.Read(0xffff)
         if (lowaddr != None) and (lowaddr > -1) and (highaddr != None) and (highaddr > -1):
             address = (lowaddr & 0xff) | ((highaddr << 8) & 0xff00)
         else:
             return False
 
         # push PC and status on stack
-        self.memory_map.Write(self.sp, (self.pc >> 8) & 0xff)
-        self.memory_map.Write(self.sp - 1, self.pc & 0xff)
-        self.memory_map.Write(self.sp - 2, self.cc)
-        self.sp -= 3
+        self.memory_map.Write(0x100 + self.sp, (self.pc >> 8) & 0xff)
+        self.memory_map.Write(0x100 + self.sp - 1, self.pc & 0xff)
+        self.memory_map.Write(0x100 + self.sp - 2, self.cc)
+        if (self.sp > 2):
+            self.sp -= 3
+        else:
+            self.sp = self.sp + 0x100 - 3
 
         # Set PC to the NMI vector
         self.pc = address
@@ -387,7 +395,7 @@ class sim6502(object):
         if addrmode == "zeropageindexedindirectx":
             # 6502 bug/feature: indirecting by x wraps within the zero page
             indirectaddr = (operand8 + self.x) & 0xff
-            addr = (self.memory_map.Read(indirectaddr + 1) << 8) + self.memory_map.Read(indirectaddr)
+            addr = (self.memory_map.Read((indirectaddr + 1) & 0xff)  << 8) + self.memory_map.Read(indirectaddr)
             operand = self.memory_map.Read(addr)
             length = 2
         elif addrmode == "zeropageindexedindirecty":
@@ -399,7 +407,7 @@ class sim6502(object):
             length = 2
         elif addrmode == "zeropageindirect":
             indirectaddr = operand8
-            addr = (self.memory_map.Read(indirectaddr + 1) << 8) + self.memory_map.Read(indirectaddr)
+            addr = (self.memory_map.Read((indirectaddr + 1) &0xff)  << 8) + self.memory_map.Read(indirectaddr)
             operand = self.memory_map.Read(addr)
             length = 2
         elif addrmode == "zeropage":
@@ -419,7 +427,7 @@ class sim6502(object):
             operand = operand8
             length = 2
         elif addrmode == "absolutey":
-            addr = operand16 + self.y
+            addr = (operand16 + self.y) & 0xffff
             operand = self.memory_map.Read(addr)
             length = 3
         elif addrmode == "absolute":
@@ -427,7 +435,7 @@ class sim6502(object):
             operand = self.memory_map.Read(addr)
             length = 3
         elif addrmode == "absolutex":
-            addr = operand16 + self.x
+            addr = (operand16 + self.x) & 0xffff
             operand = self.memory_map.Read(addr)
             length = 3
         elif addrmode == "indirect":
@@ -456,15 +464,15 @@ class sim6502(object):
             length = 3
         elif addrmode == "indirect":
             indirectaddr = operand16
-            addr = (self.memory_map.Read(indirectaddr + 1) << 8) + self.memory_map.Read(indirectaddr)
+            addr = (self.memory_map.Read((indirectaddr + 1) & 0xff) << 8) + self.memory_map.Read(indirectaddr)
             length = 3
         elif addrmode == "absoluteindexedindirect":
             indirectaddr = operand16 + self.x
-            addr = (self.memory_map.Read(indirectaddr + 1) << 8) + self.memory_map.Read(indirectaddr)
+            addr = (self.memory_map.Read((indirectaddr + 1) & 0xff) << 8) + self.memory_map.Read(indirectaddr)
             length = 3
         elif addrmode == "absoluteindirect":
             indirectaddr = operand16
-            addr = (self.memory_map.Read(indirectaddr + 1) << 8) + self.memory_map.Read(indirectaddr)
+            addr = (self.memory_map.Read((indirectaddr + 1) & 0xff) << 8) + self.memory_map.Read(indirectaddr)
             length = 3
         else:
             print("ERROR: Address mode %s not found for JMP or JSR" % addrmode)
@@ -656,11 +664,11 @@ class sim6502(object):
             if (a_10s >= 100 or a_1s >= 10 or operand_10s >= 100 or operand_1s >= 10):
                 raise ValueError("Invalid BCD argument not supported")
             sum = (a_10s + a_1s + operand_10s + operand_1s + carryin)
-            self.set_c(sum > 100)
+            self.set_c(sum >= 100)
 
             sum_1s = sum % 10
             sum_10s = (sum % 100 - sum_1s)/10
-            result = int(sum_10s) << 4 + sum_1s
+            result = ((int(sum_10s) << 4) + sum_1s) & 0xff
         else:
             result = (self.a + operand + carryin)
             self.set_c(result > 255)
@@ -1208,16 +1216,19 @@ class sim6502(object):
     def instr_pla(self, addrmode, opcode, operand8, operand16):
         self.sp = (self.sp + 1) % 256
         self.a = self.memory_map.Read(0x100 + self.sp)
+        self.make_flags_nz(self.a)
         return ("stack", self.sp)
 
     def instr_plx(self, addrmode, opcode, operand8, operand16):
         self.sp = (self.sp + 1) % 256
         self.x = self.memory_map.Read(0x100 + self.sp)
+        self.make_flags_nz(self.x)
         return ("stack", self.sp)
 
     def instr_ply(self, addrmode, opcode, operand8, operand16):
         self.sp = (self.sp + 1) % 256
         self.y = self.memory_map.Read(0x100 + self.sp)
+        self.make_flags_nz(self.y)
         return ("stack", self.sp)
 
     # Instruction ROL
@@ -1333,7 +1344,7 @@ class sim6502(object):
             carryout = diff < 0
 
             diff_1s = diff % 10
-            diff_10s = (diff % 100 - diff_1s)/10
+            diff_10s = (diff % 100 - diff_1s)//10
 
             result = diff_10s * 16 + diff_1s
         else:
