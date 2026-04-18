@@ -1447,11 +1447,16 @@ class MPUTests(unittest.TestCase, Common6502Tests):
     # Test Helpers
 
     def _get_target_class(self):
-        return test_shim.Shim6502
+        # Exercise the 65C02 variant explicitly (this is also the shim default).
+        return lambda *a, **kw: test_shim.Shim6502(*a, variant="65C02", **kw)
 
 
 def test_suite():
-    return unittest.findTestCases(sys.modules[__name__])
+    #return unittest.findTestCases(sys.modules[__name__])
+    # unittest.findTestCases was removed in Python 3.13; loadTestsFromModule
+    # is the direct replacement.
+    return unittest.defaultTestLoader.loadTestsFromModule(sys.modules[__name__])
+
 
 if __name__ == '__main__':
     unittest.main(defaultTest='test_suite')

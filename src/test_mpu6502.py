@@ -5876,14 +5876,19 @@ class MPUTests(unittest.TestCase, Common6502Tests):
 
     # This bug is fixed on 65C02 which we are emulating
     #
-    # def test_jmp_jumps_to_address_with_page_wrap_bug(self):
-    #     mpu = self._make_mpu()
-    #     mpu.memory[0x00ff] = 0
-    #     # $0000 JMP ($00)
-    #     self._write(mpu.memory, 0, (0x6c, 0xff, 0x00))
-    #     mpu.step()
-    #     self.assertEqual(0x6c00, mpu.pc)
-    #     #self.assertEqual(5, mpu.processorCycles)
+    def test_jmp_jumps_to_address_with_page_wrap_bug(self):
+        # NMOS page-wrap quirk: JMP ($xxFF) reads the high byte from $xx00
+        # instead of $(xx+1)00.  Here the low byte is read from $00FF and the
+        # high byte is read from $0000 (not $0100).
+        mpu = self._make_mpu()
+        mpu.memory[0x00ff] = 0x34    # low byte of target
+        mpu.memory[0x0000] = 0x12    # high byte (read due to wrap)
+        mpu.memory[0x0100] = 0xDE    # would be read without the wrap bug
+        # $0000 JMP ($00FF)
+        self._write(mpu.memory, 0x0200, (0x6c, 0xff, 0x00))
+        mpu.pc = 0x0200
+        mpu.step()
+        self.assertEqual(0x1234, mpu.pc)
 
     # ORA Indexed, Indirect (Y)
 
@@ -5925,10 +5930,15 @@ class MPUTests(unittest.TestCase, Common6502Tests):
         self.assertEqual(0x3f, mpu.a)
 
     def _get_target_class(self):
-        return test_shim.Shim6502
+        # MPUTests in this file exercises NMOS-specific behavior; build the
+        # shim with variant="NMOS" so JMP indirect page-wrap, BRK D-flag
+        # preservation, and the absence of 65C02-only opcodes are all active.
+        return lambda *a, **kw: test_shim.Shim6502(*a, variant="NMOS", **kw)
 
 def test_suite():
-    return unittest.findTestCases(sys.modules[__name__])
+    #return unittest.findTestCases(sys.modules[__name__])
+    print(sys.modules[__name__])
+    return unittest.defaultTestLoader.loadTestsFromModule(sys.modules[__name__])
 
 if __name__ == '__main__':
     unittest.main(defaultTest='test_suite')

@@ -13,8 +13,8 @@ class Shim6502(object):
     ZERO = 0x2
     CARRY = 0x1
 
-    def __init__(self):
-        self.mpu = sim6502.sim6502()
+    def __init__(self, variant=sim6502.sim6502.CMOS):
+        self.mpu = sim6502.sim6502(variant=variant)
 
     def step(self):
         self.mpu.execute()

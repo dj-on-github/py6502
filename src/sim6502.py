@@ -18,7 +18,37 @@ class Flags(object):
 # TODO: check for other cases of % on negative numbers leading to negative underflow
 
 class sim6502(object):
-    def __init__(self, object_code=None, address=0x0, symbols=None):
+    # Supported CPU variants
+    NMOS = "NMOS"        # Original NMOS 6502 (e.g. Apple ][, C64, NES)
+    CMOS = "65C02"       # WDC 65C02 / Rockwell R65C02 (Apple //e, //c)
+    VARIANTS = (NMOS, CMOS)
+
+    def __init__(self, object_code=None, address=0x0, symbols=None, variant=CMOS):
+        """Create a 6502-family simulator.
+
+        Parameters
+        ----------
+        object_code : sequence of int or None
+            Initial memory image to load.
+        address : int
+            Base address for object_code load.
+        symbols : dict or None
+            Optional symbol table for disassembly.
+        variant : str
+            Either "NMOS" for the original 6502 or "65C02" for the WDC/Rockwell
+            CMOS part.  Variant selection affects:
+              * JMP indirect: NMOS has the $xxFF page-wrap bug; 65C02 fixes it.
+              * BRK: 65C02 clears the D flag on entry; NMOS preserves it.
+              * BIT #imm: 65C02 affects only Z; NMOS does not implement this
+                addressing mode at all.
+              * Instruction set: BRA, STZ, PHX/PHY/PLX/PLY, INA/DEA, TRB/TSB,
+                the ($zp) addressing mode, and JMP ($abs,X) exist only on 65C02.
+        """
+        if variant not in self.VARIANTS:
+            raise ValueError(
+                "variant must be one of %r, got %r" % (self.VARIANTS, variant))
+        self.variant = variant
+
         self.pc = 0x0000
         self.a = 0x00
         self.x = 0x00
@@ -318,6 +348,32 @@ class sim6502(object):
         self.hexcodes[0xEF] = ("", "")
         self.hexcodes[0xFF] = ("", "")
 
+        # Remove 65C02-only opcodes from the dispatch table when emulating NMOS.
+        # The original NMOS 6502 treated these opcodes as "illegal" with
+        # undefined or unstable behavior; the safest approximation here is to
+        # leave them as non-instructions so execute() reports them.
+        if self.variant == self.NMOS:
+            cmos_only_opcodes = (
+                # TSB / TRB
+                0x04, 0x0C, 0x14, 0x1C,
+                # INA / DEA (INC A / DEC A)
+                0x1A, 0x3A,
+                # PHY / PLY / PHX / PLX
+                0x5A, 0x7A, 0xDA, 0xFA,
+                # STZ
+                0x64, 0x74, 0x9C, 0x9E,
+                # BRA
+                0x80,
+                # BIT immediate / BIT zp,X / BIT abs,X
+                0x89, 0x34, 0x3C,
+                # (zp) addressing mode: ORA/AND/EOR/ADC/STA/LDA/CMP/SBC
+                0x12, 0x32, 0x52, 0x72, 0x92, 0xB2, 0xD2, 0xF2,
+                # JMP (abs,X)
+                0x7C,
+            )
+            for op in cmos_only_opcodes:
+                self.hexcodes[op] = ("", "")
+
     def reset(self):
         self.a = 0x00
         self.x = 0x00
@@ -463,16 +519,34 @@ class sim6502(object):
             addr = operand16
             length = 3
         elif addrmode == "indirect":
+            # Plain JMP ($abs). On NMOS the high byte wraps within the
+            # indirect pointer's page (the famous $xxFF bug).  On 65C02 the
+            # read proceeds correctly into the next page.
             indirectaddr = operand16
-            addr = (self.memory_map.Read((indirectaddr + 1) & 0xff) << 8) + self.memory_map.Read(indirectaddr)
+            lo = self.memory_map.Read(indirectaddr)
+            if self.variant == self.NMOS:
+                hi_addr = (indirectaddr & 0xff00) | ((indirectaddr + 1) & 0xff)
+            else:
+                hi_addr = (indirectaddr + 1) & 0xffff
+            addr = (self.memory_map.Read(hi_addr) << 8) + lo
             length = 3
         elif addrmode == "absoluteindexedindirect":
-            indirectaddr = operand16 + self.x
-            addr = (self.memory_map.Read((indirectaddr + 1) & 0xff) << 8) + self.memory_map.Read(indirectaddr)
+            # 65C02-only: JMP ($abs,X).  No page-wrap quirk.
+            indirectaddr = (operand16 + self.x) & 0xffff
+            lo = self.memory_map.Read(indirectaddr)
+            hi = self.memory_map.Read((indirectaddr + 1) & 0xffff)
+            addr = (hi << 8) + lo
             length = 3
         elif addrmode == "absoluteindirect":
+            # Same as "indirect" but retained for compatibility with dis6502's
+            # naming.  Apply the same variant-dependent behavior.
             indirectaddr = operand16
-            addr = (self.memory_map.Read((indirectaddr + 1) & 0xff) << 8) + self.memory_map.Read(indirectaddr)
+            lo = self.memory_map.Read(indirectaddr)
+            if self.variant == self.NMOS:
+                hi_addr = (indirectaddr & 0xff00) | ((indirectaddr + 1) & 0xff)
+            else:
+                hi_addr = (indirectaddr + 1) & 0xffff
+            addr = (self.memory_map.Read(hi_addr) << 8) + lo
             length = 3
         else:
             print("ERROR: Address mode %s not found for JMP or JSR" % addrmode)
@@ -769,8 +843,15 @@ class sim6502(object):
     def instr_bit(self, addrmode, opcode, operand8, operand16):
         # Get the operand, immediate or from memory
         if addrmode == "immediate":
+            # 65C02-only addressing mode.  Per the WDC datasheet, BIT #imm
+            # affects only the Z flag; N and V are left unchanged (unlike
+            # the memory-operand BIT variants).
             operand = operand8
             length = 2
+            test = self.a & operand
+            self.set_z(test == 0x00)
+            self.pc += length - 1
+            return None
         else:
             operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
 
@@ -832,8 +913,10 @@ class sim6502(object):
         high = self.memory_map.Read(0xffff)
         self.pc = low + (high << 8)
         self.set_i(True)
-        # 65C02
-        self.set_d(False)
+        # 65C02 additionally clears the decimal flag on BRK/IRQ/NMI entry;
+        # NMOS 6502 leaves D unchanged.
+        if self.variant == self.CMOS:
+            self.set_d(False)
         return None
 
     # Instruction BVC
