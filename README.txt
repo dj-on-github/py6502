@@ -98,8 +98,8 @@ The Object Code Map
 -------------------
 
 Finally, you can see the list of object code values, but in decimal, since that's how python displays by default:
-        >>> a.object_code[256:268]
-        [169, 16, 162, 0, 157, 0, 16, 232, 233, 1, 16, 250, 96]
+        >>> a.object_code[256:269]
+        [169, 16, 162, 0, 157, 0, 16, 232, 233, 1, 16, 248, 96]
         >>>
 
 The assembler keeps a complete map of the 64K memory space of the 6502 and populates the code and values into that map. The 'object_code' class variable is a list containing the map. Each untouched location is set to -1. Other values indicate the 8 bit value at that location.
