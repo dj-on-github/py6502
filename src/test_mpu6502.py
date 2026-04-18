@@ -1944,10 +1944,13 @@ class Common6502Tests:
 
         self.assertEqual(0xC0, mpu.memory[0x1FF])  # PCH
         self.assertEqual(0x02, mpu.memory[0x1FE])  # PCL
-        self.assertEqual(mpu.BREAK | mpu.UNUSED, mpu.memory[0x1FD])  # Status
+        # Pushed P: BREAK | UNUSED set on software interrupts (BRK).
+        self.assertEqual(mpu.BREAK | mpu.UNUSED, mpu.memory[0x1FD])
         self.assertEqual(0xFC, mpu.sp)
 
-        self.assertEqual(mpu.BREAK | mpu.UNUSED | mpu.INTERRUPT, mpu.p)
+        # Live P after BRK: I is set, UNUSED started set and is preserved;
+        # B is NOT set in the live P register (that's only a push-time bit).
+        self.assertEqual(mpu.UNUSED | mpu.INTERRUPT, mpu.p)
 
     # BVC
 
@@ -4350,16 +4353,24 @@ class Common6502Tests:
         self.assertEqual(0xFC,   mpu.p)
         self.assertEqual(0xFF,   mpu.sp)
 
-    def test_rti_forces_break_and_unused_flags_high(self):
+    def test_rti_restores_status_faithfully(self):
+        # RTI pulls the flag byte from stack and restores it without the
+        # post-hoc B/bit-5 fixup that py65 applies.  In our more
+        # hardware-accurate model, B and bit-5 come from whatever was on
+        # the stack.  The NEXT push (PHP / BRK / IRQ) is what decides the
+        # final value of B/bit-5 on the stack.
         mpu = self._make_mpu()
         # $0000 RTI
         mpu.memory[0x0000] = 0x40
-        self._write(mpu.memory, 0x01FD, (0x00, 0x03, 0xC0))  # Status, PCL, PCH
+        # Pulled bytes: flag=0x00, PCL=0x03, PCH=0xC0
+        self._write(mpu.memory, 0x01FD, (0x00, 0x03, 0xC0))
         mpu.sp = 0xFC
 
         mpu.step()
-        self.assertEqual(mpu.BREAK, mpu.p & mpu.BREAK)
-        self.assertEqual(mpu.UNUSED, mpu.p & mpu.UNUSED)
+        self.assertEqual(0xC003, mpu.pc)
+        # B and UNUSED restored from the pulled 0x00
+        self.assertEqual(0, mpu.p & mpu.BREAK)
+        self.assertEqual(0, mpu.p & mpu.UNUSED)
 
     # RTS
 

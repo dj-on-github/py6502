@@ -468,14 +468,20 @@ class MPUTests(unittest.TestCase, Common6502Tests):
     # BRK
 
     def test_brk_clears_decimal_flag(self):
+        # On 65C02, BRK (and IRQ/NMI) clear D.  Under our more
+        # hardware-accurate P-register model, B is NOT set in the live P
+        # register after BRK -- only in the pushed flag byte on the stack.
         mpu = self._make_mpu()
         mpu.p = mpu.DECIMAL
         # $C000 BRK
         mpu.memory[0xC000] = 0x00
         mpu.pc = 0xC000
         mpu.step()
-        self.assertEqual(mpu.BREAK, mpu.p & mpu.BREAK)
+        # Pushed P has B=1 and UNUSED=1.
+        self.assertEqual(mpu.BREAK, mpu.memory[0x01FD] & mpu.BREAK)
+        # Live P: D cleared, B not set.
         self.assertEqual(0, mpu.p & mpu.DECIMAL)
+        self.assertEqual(0, mpu.p & mpu.BREAK)
 
     # CMP Zero Page, Indirect
 

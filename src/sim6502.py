@@ -392,30 +392,40 @@ class sim6502(object):
 
     def nmi(self):
         # Read the NMI vector
-        self.set_i(True)
+        #self.set_i(True)
         lowaddr = self.memory_map.Read(0xfffa)
         highaddr = self.memory_map.Read(0xfffb)
         if (lowaddr != None) and (lowaddr > -1) and (highaddr != None) and (highaddr > -1):
             address = (lowaddr & 0xff) | ((highaddr << 8) & 0xff00)
         else:
             return False
+            
+        # Hardware interrupts push P with bit 4 (BREAK) cleared and bit 5
+        # (UNUSED) set, so handlers can distinguish IRQ/NMI from BRK by
+        # inspecting the pushed P value.
+        pushed_p = (self.cc & ~Flags.BREAK) | Flags.UNUSED
 
         # push PC and status on stack
         self.memory_map.Write(0x100 + self.sp, (self.pc >> 8) & 0xff)
         self.memory_map.Write(0x100 + self.sp - 1, self.pc & 0xff)
-        # TODO: does this actually set this flag before pushing to the stack?
-        self.memory_map.Write(0x100 + self.sp - 2, self.cc | Flags.UNUSED)
+        self.memory_map.Write(0x100 + self.sp - 2, pushed_p)
         if (self.sp > 2):
             self.sp -= 3
         else:
             self.sp = self.sp + 0x100 - 3
+
+        # Set I to disable further IRQs while handling this one.  65C02
+        # additionally clears D on interrupt entry; NMOS preserves D.
+        self.set_i(True)
+        if self.variant == self.CMOS:
+            self.set_d(False)
 
         # Set PC to the NMI vector
         self.pc = address
         return True
 
     def irq(self):
-        self.set_i(True)
+        #self.set_i(True)
         # Read the IRQ vector
         lowaddr = self.memory_map.Read(0xfffe)
         highaddr = self.memory_map.Read(0xffff)
@@ -423,17 +433,27 @@ class sim6502(object):
             address = (lowaddr & 0xff) | ((highaddr << 8) & 0xff00)
         else:
             return False
+            
+        # Hardware interrupts push P with bit 4 (BREAK) cleared and bit 5
+        # (UNUSED) set.
+        pushed_p = (self.cc & ~Flags.BREAK) | Flags.UNUSED
 
         # push PC and status on stack
         self.memory_map.Write(0x100 + self.sp, (self.pc >> 8) & 0xff)
         self.memory_map.Write(0x100 + self.sp - 1, self.pc & 0xff)
-        self.memory_map.Write(0x100 + self.sp - 2, self.cc)
+        self.memory_map.Write(0x100 + self.sp - 2, pushed_p)
         if (self.sp > 2):
             self.sp -= 3
         else:
             self.sp = self.sp + 0x100 - 3
 
-        # Set PC to the NMI vector
+        # Set I to disable further IRQs while handling this one.  65C02
+        # additionally clears D on interrupt entry; NMOS preserves D.
+        self.set_i(True)
+        if self.variant == self.CMOS:
+            self.set_d(False)
+
+        # Set PC to the IRQ vector
         self.pc = address
         return True
 
@@ -906,9 +926,14 @@ class sim6502(object):
     def instr_brk(self, addrmode, opcode, operand8, operand16):
         # PC is pre-incremented on instruction fetch
         self.pushaddr(self.pc + 1)
-        self.set_s(True)
-        self.set_b(True)
-        self.push(self.cc)
+        
+        #self.set_s(True)
+        #self.set_b(True)
+        #self.push(self.cc)
+        # BRK pushes P with B=1 and bit-5=1 so handlers can distinguish it
+        # from hardware interrupts.
+        self.push(self.cc | Flags.BREAK | Flags.UNUSED) 
+               
         low = self.memory_map.Read(0xfffe)
         high = self.memory_map.Read(0xffff)
         self.pc = low + (high << 8)
@@ -1260,7 +1285,12 @@ class sim6502(object):
     # FA       plx
     # 7A       ply
     def instr_php(self, addrmode, opcode, operand8, operand16):
-        self.memory_map.Write(0x100 + self.sp, self.cc)
+        #self.memory_map.Write(0x100 + self.sp, self.cc)
+        # PHP always pushes P with bits 4 (BREAK) and 5 (UNUSED) set, because
+        # on real hardware those bits are always forced to 1 on software
+        # pushes.  The flags-as-stored internal state is untouched.
+        self.memory_map.Write(0x100 + self.sp,
+                             self.cc | Flags.BREAK | Flags.UNUSED)
         if self.sp:
             self.sp = self.sp - 1
         else:
@@ -1381,10 +1411,15 @@ class sim6502(object):
 
     # 40       rti
     def instr_rti(self, addrmode, opcode, operand8, operand16):
+        # Restore the flag byte from stack faithfully. On real hardware bits 4
+        # and 5 of P are not actually stored by the CPU (they are synthesized
+        # at push time), so whatever we pull into those positions is a
+        # don't-care -- the next PHP / BRK / IRQ / NMI will set them to the
+        # hardware-correct value on its own push.
         self.cc = self.pull()
         self.pc = self.pulladdr()
-        self.set_b(True)
-        self.set_s(True)
+        #self.set_b(True)
+        #self.set_s(True)
         return ("stack", self.sp)
 
     # Instruction RTS
