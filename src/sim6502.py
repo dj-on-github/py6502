@@ -995,29 +995,28 @@ class sim6502(object):
     # D2 20    cmp ($20)
     def instr_cmp(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
+        # CMP sets C=1 if A >= operand (unsigned), else C=0.
+        self.set_c(self.a >= operand)
         test = self.a - operand
-        # TODO: add test case
         if test < 0:
             test += 256
         self.make_flags_nz(test)
         self.pc += length - 1
         return None
 
-    # Instruction CMP
+    # Instruction CPX
     # E0 55    cpx #$55
     # E4 20    cpx $20
     # EC 33 22 cpx $2233
-    # C0 55    cpy #$55
-    # C4 20    cpy $20
-    # CC 33 22 cpy $2233
     def instr_cpx(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
-        test = self.a - operand
-        # TODO: add test case
+        # CPX sets C=1 if X >= operand (unsigned), else C=0.
+        self.set_c(self.x >= operand)
+        test = self.x - operand
         if test < 0:
             test += 256
         self.make_flags_nz(test)
-        self.pc += length
+        self.pc += length - 1
         return None
 
     # Instruction CPY
@@ -1026,8 +1025,9 @@ class sim6502(object):
     # CC 33 22 cpy $2233
     def instr_cpy(self, addrmode, opcode, operand8, operand16):
         operand, addr, length = self.get_operand(addrmode, opcode, operand8, operand16)
+        # CPY sets C=1 if Y >= operand (unsigned), else C=0.
+        self.set_c(self.y >= operand)
         test = self.y - operand
-        # TODO: add test case
         if test < 0:
             test += 256
         self.make_flags_nz(test)
