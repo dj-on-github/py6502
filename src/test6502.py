@@ -233,6 +233,7 @@ start: lda #$50
        sta $5000 ; blah
        sta $25
        clc
+       cld
        ROR A
        adc #%10011010
        sta %0101101000111100

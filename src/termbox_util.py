@@ -129,15 +129,15 @@ class viewplane(object):
 # The utility functions that operate over a termbox or viewplane
 #
 class termbox_util():
-    key_up   = 1
-    key_down = 2
-    key_left = 3
-    key_right = 4
-    key_escape = 5
-    key_return = 6
-    key_delete = 7
-    key_backspace = 8
-    key_tab = 9
+    key_up                  = 1
+    key_down                = 2
+    key_left                = 3
+    key_right               = 4
+    key_escape              = 5
+    key_return              = 6
+    key_delete              = 7
+    key_backspace           = 8
+    key_tab                 = 9
     TB_KEY_F1               = (0xFFFF-0)
     TB_KEY_F2               = (0xFFFF-1)
     TB_KEY_F3               = (0xFFFF-2)

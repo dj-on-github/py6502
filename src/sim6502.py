@@ -756,7 +756,7 @@ class sim6502(object):
             operand_10s = ((operand & 0xf0) >> 4) * 10
             operand_1s = (operand & 0xf)
             if (a_10s >= 100 or a_1s >= 10 or operand_10s >= 100 or operand_1s >= 10):
-                raise ValueError("Invalid BCD argument not supported")
+                raise ValueError(f"Invalid BCD argument not supported. self.a={hex(self.a)}, operand={hex(operand)},  a_1s={a_1s}, a_10s={a_10s}, operand_1s={operand_1s}, operand_10s={operand_10s}")
             sum = (a_10s + a_1s + operand_10s + operand_1s + carryin)
             self.set_c(sum >= 100)
 
