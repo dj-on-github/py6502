@@ -1391,6 +1391,7 @@ class asm6502():
         bytelist = list()
         bytecount = 0
         address = 0
+        checksum = 0
 
         datarecord = "00"
         eofrecord = ":00000001FF"
@@ -1400,12 +1401,14 @@ class asm6502():
                 address = i
                 values = list()
                 values.append(self.object_code[i])
+                checksum = self.object_code[i] % 256
                 localrun = 1
                 i = i + 1
                 if (i < 65536):
                     nextval = self.object_code[i]
                     while (nextval != -1) and (localrun < 16):
                         values.append(nextval)
+                        checksum = (checksum+nextval) % 256
                         i = i + 1
                         localrun = localrun + 1
                         if (i < 65536):
@@ -1413,11 +1416,20 @@ class asm6502():
                         else:
                             nextval = -1
                     length = len(values)
+                    checksum = (checksum+length) % 256
+                    checksum = (checksum+(address & 0xff)) % 256
+                    checksum = (checksum+((address >> 8) & 0xff)) % 256
                     astring = ":%02X%04x" % (length, address)
                     astring += datarecord
                     for value in values:
                         astring += "%02X" % value
+                    
+                    checksum = checksum ^ 0xff # Two complement the checksum
+                    checksum = checksum + 1
+                    astring += "%02X" % checksum
+
                     theoutput.append(astring)
+                    checksum = 0
 
                 else:
                     length = len(values)
