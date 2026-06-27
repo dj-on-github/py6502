@@ -1425,7 +1425,7 @@ class asm6502():
                         astring += "%02X" % value
                     
                     checksum = checksum ^ 0xff # Two complement the checksum
-                    checksum = checksum + 1
+                    checksum = (checksum + 1) % 256
                     astring += "%02X" % checksum
 
                     theoutput.append(astring)
