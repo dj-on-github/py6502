@@ -1030,7 +1030,13 @@ class asm6502():
         labelstring, mystring = self.strip_label(mystring, linenumber)
         opcode_anycase, operand = self.strip_opcode(mystring, linenumber)
         opcode = self.check_opcode(opcode_anycase, linenumber)
-        premode, value = self.identify_addressmodeformat(operand, linenumber)
+        
+        # db/dw/ddw/dqw operands are data lists handled by decode_extra;
+        # they have no address mode, so don't try to parse one.
+        if opcode in self.validpseudoops:
+            premode, value = "nothing", ""
+        else:
+            premode, value = self.identify_addressmodeformat(operand, linenumber)
 
         # Handle ORG directive
         if opcode == "org":

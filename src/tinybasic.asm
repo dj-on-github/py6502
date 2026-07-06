@@ -61,10 +61,18 @@ scdh:   EQU $2f
 sccl:   EQU $30
 scch:   EQU $31
 ctrl:   EQU $32
+outfile:EQU $33
+lslo:   EQU $34             ; LIST range: start line (low)
+lshi:   EQU $35             ; LIST range: start line (high)
+lelo:   EQU $36             ; LIST range: end line (low)
+lehi:   EQU $37             ; LIST range: end line (high)
 
 ; ---- constants ----
 kbd:    EQU $c000
 kbdstrb:EQU $c010
+filecmd:EQU $c0f0
+filestat:EQU $c0f0
+filedata:EQU $c0f1
 varlo:  EQU $0200
 varhi:  EQU $0201
 gostk:  EQU $0400
@@ -364,6 +372,113 @@ iffalse:
 
 st_list:
         lda #$00
+        sta outfile
+        ; default range = whole program (0 .. $FFFF)
+        lda #$00
+        sta lslo
+        sta lshi
+        lda #$ff
+        sta lelo
+        sta lehi
+        jsr skipspaces
+        jsr curch
+        beq listgo          ; "LIST" with no argument -> list all
+        jsr expr            ; first line number
+        lda accl
+        sta lslo
+        lda acch
+        sta lshi
+        lda accl            ; single-line default: end = start
+        sta lelo
+        lda acch
+        sta lehi
+        jsr skipspaces
+        jsr curch
+        cmp #$2c            ; ',' ?
+        bne listgo          ; no comma -> single line
+        jsr advtxt          ; skip the comma
+        jsr skipspaces
+        jsr expr            ; second line number (range end)
+        lda accl
+        sta lelo
+        lda acch
+        sta lehi
+listgo: jsr listprog
+        rts
+
+st_save:
+        lda #$53
+        sta filecmd
+        lda #$01
+        sta outfile
+        lda #$00            ; SAVE lists the whole program
+        sta lslo
+        sta lshi
+        lda #$ff
+        sta lelo
+        sta lehi
+        jsr listprog
+        lda #$00
+        sta outfile
+        lda #$45
+        sta filecmd
+        rts
+
+st_load:
+        lda #$4c
+        sta filecmd
+ldwait: lda filestat
+        and #$80
+        bne ldwait
+        lda filestat
+        and #$02
+        bne lderr
+        jsr st_new
+ldline: lda filestat
+        and #$01
+        beq lddone
+        ldy #$00
+ldch:   lda filestat
+        and #$01
+        beq ldendl
+        lda filedata
+        cmp #$0d
+        beq ldendl
+        cmp #$0a
+        beq ldendl
+        sta linbuf,y
+        iny
+        cpy #$70
+        bcc ldch
+ldendl: lda #$00
+        sta linbuf,y
+        lda #$00
+        sta txtl
+        lda #$03
+        sta txth
+        jsr skipspaces
+        jsr curch
+        beq ldline
+        cmp #$30
+        bcc ldline
+        cmp #$3a
+        bcs ldline
+        jsr parsenum
+        lda accl
+        sta linl
+        lda acch
+        sta linh
+        jsr curch
+        cmp #$20
+        bne ldsl
+        jsr skipspaces
+ldsl:   jsr storeline
+        jmp ldline
+lddone: rts
+lderr:  jmp error
+
+listprog:
+        lda #$00
         sta ptrl
         lda #$20
         sta ptrh
@@ -380,9 +495,27 @@ lsin:   ldy #$00
         iny
         lda (ptrl),y
         sta acch
+        ; skip this line if its number < start (lslo:lshi)
+        lda acch
+        cmp lshi
+        bcc lsskip
+        bne lschke
+        lda accl
+        cmp lslo
+        bcc lsskip
+lschke: ; skip this line if its number > end (lelo:lehi)
+        lda acch
+        cmp lehi
+        bcc lsprint
+        bne lsskip
+        lda accl
+        cmp lelo
+        beq lsprint
+        bcs lsskip
+lsprint:
         jsr prdec
         lda #$20
-        jsr putchar
+        jsr emit
         clc
         lda ptrl
         adc #$02
@@ -393,13 +526,14 @@ lsin:   ldy #$00
 lstext: ldy #$00
         lda (srcl),y
         beq lseol
-        jsr putchar
+        jsr emit
         inc srcl
         bne lst2
         inc srch
 lst2:   jmp lstext
-lseol:  jsr prcr
-        jsr recnext
+lseol:  lda #$0d
+        jsr emit
+lsskip: jsr recnext
         jmp lsloop
 lsdone: rts
 
@@ -498,6 +632,58 @@ instore:
         jmp inloop
 indone: rts
 inerr:  jmp error
+
+st_cxy: jsr skipspaces
+        jsr curch
+        cmp #$28
+        bne cxy1
+        jsr advtxt
+cxy1:   jsr expr
+        lda accl
+        sta tmp3
+        jsr skipspaces
+        jsr curch
+        cmp #$2c
+        bne cxyerr
+        jsr advtxt
+        jsr expr
+        lda accl
+        sta auxl
+        lda acch
+        sta auxh
+        lda #$28
+        sta accl
+        lda #$00
+        sta acch
+        jsr mul16
+        clc
+        lda accl
+        adc tmp3
+        sta accl
+        lda acch
+        adc #$00
+        sta acch
+        clc
+        lda accl
+        adc #$00
+        sta accl
+        lda acch
+        adc #$08
+        sta acch
+        lda accl
+        sta scl
+        lda acch
+        sta sch
+        lda tmp3
+        sta col
+        jsr skipspaces
+        jsr curch
+        cmp #$29
+        bne cxydone
+        jsr advtxt
+cxydone:
+        rts
+cxyerr: jmp error
 
 st_poke:
         jsr expr
@@ -1116,7 +1302,7 @@ c16lt:  lda #$ff
 prdec:  lda acch
         bpl pdpos
         lda #$2d
-        jsr putchar
+        jsr emit
         sec
         lda #$00
         sbc accl
@@ -1155,7 +1341,7 @@ pdprint:
         tya
         clc
         adc #$30
-        jsr putchar
+        jsr emit
 pdnext: inx
         jmp pdpow
 pddone: rts
@@ -1475,6 +1661,16 @@ erp:    lda errmsg,x
 erd:    jsr prcr
         jmp warm
 
+emit:   pha
+        lda outfile
+        beq emitscr
+        pla
+        sta filedata
+        rts
+emitscr:
+        pla
+        jmp putchar
+
 prcr:   lda #$0d
         jsr putchar
         rts
@@ -1684,10 +1880,22 @@ kwtab:
         DB 4
         DB "LIST"
         DW &st_list
+        DB 4
+        DB "SAVE"
+        DW &st_save
+        DB 4
+        DB "LOAD"
+        DW &st_load
         DB 3
         DB "RUN"
         DW &st_run
         DB 3
         DB "NEW"
         DW &st_new
+        DB 3
+        DB "CLS"
+        DW &clrscr
+        DB 3
+        DB "CXY"
+        DW &st_cxy
         DB 0
