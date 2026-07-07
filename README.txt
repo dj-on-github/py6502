@@ -132,8 +132,10 @@ DB, DW, DDW and DQW all work in the same way:
   * Hex number (indicated by $ prefix)
   * Octal number (indicated by @ prefix)
   * Binary number (indicated by % prefix)
-  * Label (indicated by & prefix)
+  * Label (the & prefix is accepted but optional)
   * String (delimited "thus")
+  * An expression combining numbers and labels with + and -, optionally
+    prefixed with < (low byte) or > (high byte) - see "Expressions" below
 * Each string *item* is transformed into one 8-bit *value* per character (the ASCII code of the character)
 * Every other item represents a single *value*
 * Every *value* is zero-padded or truncated to generate one or more *bytes* in the object code (1 byte-per-value for DB, 2 for DW etc.)
@@ -142,8 +144,10 @@ DB, DW, DDW and DQW all work in the same way:
 Examples:
 
 DB $0d, "the rain in spain", $0
-DB &entry, &loop                 ; both truncated to low byte
-DW &entry, "fish"                ; each character padded to 16-bits
+DB entry, loop                   ; both truncated to low byte
+DW entry, "fish"                 ; each character padded to 16-bits
+DW jumptable+4                   ; label arithmetic
+DB <entry, >entry                ; low byte, high byte
 
 Prefixes
 --------
@@ -166,10 +170,11 @@ An EQU directive explicitly declares the value of a label. A label without an EQ
 but cannot be a forward symbolic reference.
 
 Any address or 16 bit data field can be replaced with a declared label and the label address will be inserted there.
-In a DW declaration you need to prefix a label with & to tell the assembler it's a label. Examples:
+In DB/DW/DDW/DQW declarations a label can be used directly; the & prefix is accepted for backward compatibility but is optional. Examples:
 
         dw  $1000, @2000, 123  ; Implicit numbers have a base prefix.
-ttable: dw  &l1, &l2, &l3      ; labels in a DW prefixed with &
+ttable: dw  l1, l2, l3         ; labels in a DW
+        dw  &l1, &l2, &l3      ; the same, with the optional & prefix
         org $1000
 l1:     lda #$20
         jmp skip
@@ -177,6 +182,26 @@ l2:     lda #$30
         jmp skip
 l3:     lda #$40
 skip:   sta $10
+
+Expressions
+-----------
+
+Wherever a number or label is accepted (instruction operands, DB/DW/DDW/DQW items, ORG and EQU values) you can use a simple expression instead:
+
+* Terms are numbers in any base ($ hex, @ octal, % binary, decimal) or labels
+* Terms can be added and subtracted with + and -
+* The whole expression can be prefixed with < to take the low byte or > to take the high byte of its value
+
+Examples:
+
+        sta dp+1        ; the byte after dp
+        lda #<h_last    ; low byte of the address of h_last
+        lda #>h_last    ; high byte of the address of h_last
+        lda buffer+2,x  ; indexing works with expressions too
+        dw  vector-1    ; expressions in data declarations
+        db  <entry+3    ; low byte of (entry + 3)
+
+Note there is no operator precedence or bracketing; expressions are evaluated left to right with + and - only.
 
 Assembling Into the Same Map
 ----------------------------
