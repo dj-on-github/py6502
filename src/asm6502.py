@@ -69,15 +69,26 @@ class asm6502():
 
     def strip_comments(self, thestring):
         self.debug(3, "STRIP_COMMENTS %s" % thestring)
-        position = thestring.find(';')
-        if (position == -1):
-            return (thestring, "")
-        else:
-            return (thestring[:position].rstrip(), thestring[position:].rstrip())
+        # a ';' inside a quoted string (e.g. DB ";") is not a comment
+        in_string = False
+        for position, c in enumerate(thestring):
+            if c == '"':
+                in_string = not in_string
+            elif (c == ';') and not in_string:
+                return (thestring[:position].rstrip(), thestring[position:].rstrip())
+        return (thestring, "")
 
     # find a label at the front. Strip it and return the symbol
     def strip_label(self, thestring, linenumber):
-        position = thestring.find(':')
+        # a ':' inside a quoted string (e.g. DB ":") is not a label marker
+        position = -1
+        in_string = False
+        for i, c in enumerate(thestring):
+            if c == '"':
+                in_string = not in_string
+            elif (c == ':') and not in_string:
+                position = i
+                break
         if (position == -1):
             return ("", thestring.strip())
         else:
@@ -183,6 +194,10 @@ class asm6502():
             premode = "number"
             value = thestring
         elif ((thestring[0] in self.letters) and ((thestring != "A") or (thestring != "a"))):
+            premode = "number"
+            value = thestring
+        elif (thestring[0] == "<") or (thestring[0] == ">"):
+            # low byte (<) or high byte (>) of an expression
             premode = "number"
             value = thestring
         elif (thestring[0] == "+") or (thestring[0] == "-"):
@@ -302,147 +317,72 @@ class asm6502():
         - $1234 - a *value* in hex
         - @477 - a *value* in octal
         - %1101 - a *value* in binary
-        - &loop - the *value* of a label
+        - loop or &loop - the *value* of a label
+        - an expression combining the above with + and -, optionally
+          prefixed with < (low byte) or > (high byte), e.g. dp+1, <h_last
 
-        count=True  -> return list of bytes (used during pass 2). Each *value* is expanded
+        count=True  -> return the number of bytes that would be generated (used during pass 1)
+        count=False -> return list of bytes (used during pass 2). Each *value* is expanded
                        to bytes_per bytes by either truncating or 0-padding.
-        count=False -> return the number of bytes that would be generated (used during pass 1)
 
         Various Warnings and Errors are detected and reported:
-        - illegal digit (digit inconsistent with stated number base)
+        - unparseable item / undefined label
         - truncation of a *value*
-        - undefined label
         - trailing delimiter
         - non-terminated string
         """
-        # step 1: use a simple FSM to parse the comma-separated list of items
-        # into a list of values. Report error on illegal character
-        state = "IDLE" # IDLE, STRING, HEX, DEC, OCT, BIN, LABEL, DELIM
-        base = 0
-        values = list()
-        val = ""
+        # step 1: split the line into comma-separated items, keeping
+        # quoted strings intact (a comma inside "..." is not a delimiter)
+        items = list()
+        current = ""
+        in_string = False
         for c in s:
-            self.debug(4, f"FSM in state {state} with val {val} and processing {c}")
-            if state == "IDLE" or state == "DELIM":
-                # distinguish IDLE/DELIM because ending a line in IDLE is OK
-                # (trailing spaces?) but ending in DELIM is an error
-                val = ""
-                if c == " ":
-                    state = "IDLE" # in case it was DELIM
-                elif c == '"':
-                    state = "STRING"
-                elif c == '$':
-                    state = "HEX"
-                    base = 16
-                elif c == '@':
-                    state = "OCT"
-                    base = 8
-                elif c == '%':
-                    state = "BIN"
-                    base = 2
-                elif c in self.decimal_digits:
-                    state = "DEC"
-                    base = 10
-                    val = c
-                elif c == '&':
-                    state = "LABEL"
-                elif c == ',' and state == "IDLE":
-                    state = "DELIM"
-                else:
-                    self.warning(linenumber, linetext, f"Unexpected character FSM={state}")
-            elif state == "STRING":
+            if in_string:
+                current += c
                 if c == '"':
-                    state = "IDLE"
-                else:
-                    values.append(ord(c))
-            elif state == "HEX":
-                if c in self.hex_digits:
-                    val = val + c
-                elif c == " ":
-                    values.append(int(val,base))
-                    state = "IDLE"
-                elif c == ",":
-                    values.append(int(val,base))
-                    state = "DELIM"
-                else:
-                    self.error(linenumber, linetext, "Unexpected character in hex")
-            elif state == "DEC":
-                if c in self.decimal_digits:
-                    val = val + c
-                elif c == " ":
-                    values.append(int(val,base))
-                    state = "IDLE"
-                elif c == ",":
-                    values.append(int(val,base))
-                    state = "DELIM"
-                else:
-                    self.error(linenumber, linetext, "Unexpected character in decimal")
-            elif state == "OCT":
-                if c in self.octal_digits:
-                    val = val + c
-                elif c == " ":
-                    values.append(int(val,base))
-                    state = "IDLE"
-                elif c == ",":
-                    values.append(int(val,base))
-                    state = "DELIM"
-                else:
-                    self.error(linenumber, linetext, "Unexpected character in octal")
-            elif state == "BIN":
-                if c in self.binary_digits:
-                    val = val + c
-                elif c == " ":
-                    values.append(int(val,base))
-                    state = "IDLE"
-                elif c == ",":
-                    values.append(int(val,base))
-                    state = "DELIM"
-                else:
-                    self.error(linenumber, linetext, "Unexpected character in binary")
-            elif state == "LABEL":
-                if c in self.letters or c in self.decimal_digits:
-                    val = val + c
-                elif c == " ":
-                    if count:
-                        values.append(0)
-                    else:
-                        if val in self.symbols:
-                            values.append(self.symbols[val])
-                        else:
-                            values.append(0)
-                            self.error(linenumber, linetext, f"Undefined symbol {val}")
-                    state = "IDLE"
-                elif c == ",":
-                    if count:
-                        values.append(0)
-                    else:
-                        if val in self.symbols:
-                            values.append(self.symbols[val])
-                        else:
-                            values.append(0)
-                            self.error(linenumber, linetext, f"Undefined symbol {val}")
-                    state = "DELIM"
-                else:
-                    self.warning(linenumber, linetext, "Unexpected character in label")
+                    in_string = False
+            elif c == '"':
+                current += c
+                in_string = True
+            elif c == ',':
+                items.append(current)
+                current = ""
             else:
-                self.error(linenumber, linetext, "FSM is confused")
-
-        # Tidy up at end.. may be implicit end of number or label
-        if state == "STRING":
+                current += c
+        items.append(current)
+        if in_string:
             self.warning(linenumber, linetext, "Unterminated string")
-        elif state in ("DEC", "HEX", "OCT", "BIN"):
-            values.append(int(val,base))
-        elif state == "LABEL":
-            if count:
-                values.append(0)
+
+        # step 1b: convert each item to one or more values
+        values = list()
+        for i, item in enumerate(items):
+            item = item.strip()
+            if item == "":
+                if len(items) > 1:
+                    if i == len(items) - 1:
+                        self.warning(linenumber, linetext, "Trailing delimiter")
+                    else:
+                        self.warning(linenumber, linetext, "Empty item in list")
+                continue
+            if item[0] == '"':
+                # quoted string: one value per character
+                body = item[1:-1] if item.endswith('"') and len(item) >= 2 else item[1:]
+                for c in body:
+                    values.append(ord(c))
             else:
-                if val in self.symbols:
-                    values.append(self.symbols[val])
-                else:
+                # numeric literal, label (with optional & prefix) or expression
+                if item[0] == '&':
+                    item = item[1:].strip()
+                if count:
+                    # pass 1: labels may not be defined yet; just count
                     values.append(0)
-                    self.error(linenumber, linetext, f"Undefined symbol {val}")
-        elif state == "DELIM":
-            self.warning(linenumber, linetext, "Trailing delimiter")
+                else:
+                    v = self.decode_value(item)
+                    if v == -1:
+                        values.append(0)
+                        self.error(linenumber, linetext, f"Undefined symbol or bad expression \"{item}\"")
+                    else:
+                        values.append(v)
 
         if count:
             return len(values) * bytes_per
@@ -464,23 +404,72 @@ class asm6502():
         return obj_bytes
 
 
-    def decode_value(self, s):
+    def decode_term(self, s):
         """ s is a string representing a number or a symbol; return
         the number. First check the symbol table, else accept $ @ %
-        as base prefixes else expect decimal. 
+        as base prefixes else expect decimal.
         """
-        if s in self.symbols:
-            return self.symbols[s]
-        elif (s[0] == '$'):
-            return int(s[1:], 16)
-        elif (s[0] == '@'):
-            return int(s[1:], 8)
-        elif (s[0] == '%'):
-            return int(s[1:], 2)
-        elif (s[0] in self.decimal_digits):
-            return int(s)
-        else:
+        if s == "":
             return -1
+        try:
+            if s in self.symbols:
+                return self.symbols[s]
+            elif (s[0] == '$'):
+                return int(s[1:], 16)
+            elif (s[0] == '@'):
+                return int(s[1:], 8)
+            elif (s[0] == '%'):
+                return int(s[1:], 2)
+            elif (s[0] in self.decimal_digits):
+                return int(s)
+            else:
+                return -1
+        except ValueError:
+            return -1
+
+    def decode_value(self, s):
+        """ s is an expression: terms (numbers in any base, or symbols)
+        combined with + and -, optionally prefixed with < (low byte)
+        or > (high byte). e.g. "dp+1", "<h_last", ">wbuf+2", "$1000".
+        Returns the value, or -1 if it cannot be evaluated.
+        """
+        s = s.strip()
+        if s == "":
+            return -1
+
+        # fast path: plain symbol or literal
+        v = self.decode_term(s)
+        if v != -1:
+            return v
+
+        # optional low/high byte selector
+        byteselector = None
+        if s[0] in "<>":
+            byteselector = s[0]
+            s = s[1:].strip()
+            if s == "":
+                return -1
+
+        # evaluate terms separated by + and -
+        total = 0
+        for part in re.findall(r"[+-]?[^+-]+", s):
+            part = part.strip()
+            sign = 1
+            if part[:1] == '+':
+                part = part[1:].strip()
+            elif part[:1] == '-':
+                sign = -1
+                part = part[1:].strip()
+            v = self.decode_term(part)
+            if v == -1:
+                return -1
+            total += sign * v
+
+        if byteselector == '<':
+            total = total & 0xff
+        elif byteselector == '>':
+            total = (total >> 8) & 0xff
+        return total
 
     #   Address mode        format                    name applied
     # implicit                                       ~ "implicit"
