@@ -48,19 +48,21 @@ else:
     f=sys.stdin
     using_stdin=True
     # Usage
-    filename = get_unique_filename("output6502.asm")
+    filename = get_unique_filename("output6502.lst")
+
+
 
 if using_stdin:
     print("Assembling from stdin")
 else:
-    print("Assembling from file: filename")
+    print(f"Assembling from file: {filename}")
 
 # Get filename without the extension
 if using_stdin or (filename==".asm"): # A filename of just .asm would cause a
                                       # zero length prefix.
-    filename="output6502.asm"
+    filename=get_unique_filename("output6502.lst")
         
-if filename[-4:]=='.asm':
+if filename[-4]=='.':
     file_prefix_l = filename[:-4]
 else:
     file_prefix_l = filename
@@ -69,7 +71,7 @@ else:
 if args.listing_filename:
     listing_filename=args.listing_filename
 else:
-    listing_filename = file_prefix_l+".lst"
+    listing_filename = get_unique_filename(file_prefix_l+".lst")
 
 listing_file = open(listing_filename,"w")
 
@@ -78,7 +80,7 @@ listing_file = open(listing_filename,"w")
 if args.ihex_filename:
     ihex_filename=args.ihex_filename
 else:
-    ihex_filename = file_prefix_l+".hex"
+    ihex_filename = get_unique_filename(file_prefix_l+".hex")
 
 ihex_file = open(ihex_filename,"w")
 
@@ -87,7 +89,7 @@ ihex_file = open(ihex_filename,"w")
 if args.symbol_filename:
     symbol_filename=args.symbol_filename
 else:
-    symbol_filename = file_prefix_l+".sym"
+    symbol_filename = get_unique_filename(file_prefix_l+".sym")
 
 symbol_file = open(symbol_filename,"w")
 

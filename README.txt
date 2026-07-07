@@ -411,6 +411,50 @@ L0104:     0104 9d 00 10 sta  L1000,x
 
 A symbol is generated for any referenced address, provided one doesn't currently exist. This includes references outside the region being disassembled (L1000 in this example). You can mix this technique with manual manipulation of the symbol table. For example, as an iterative process of exploring a piece of unknown code.
 
+Assembling From the Command Line
+--------------------------------
+The normal way to assemble code using this library is to write a python program to feed
+the assembly file lines to the assembler then use the output as required.
+
+If you want a more normal approach of using the command line to assemble a file, the
+6502asm program will do that.
+
+usage: 6502asm [-h] [-l LISTING_FILENAME] [-i IHEX_FILENAME] [-s SYMBOL_FILENAME] [-v]
+               [filename]
+
+Assembles a 6502 .asm file using py6502
+
+positional arguments:
+  filename              6502 Assembler source file .asm by default. Omit for stdin
+
+options:
+  -h, --help            show this help message and exit
+  -l, --list LISTING_FILENAME
+                        Filename to send listing output to. Defaults to <filename>.lst
+  -i, --intelhex IHEX_FILENAME
+                        Filename to send intelhex output to. Defaults to <filename>.hex
+  -s, --symbol SYMBOL_FILENAME
+                        Filename to send symbol table output to. Defaults to <filename>.sym
+  -v, --verbose
+
+Typical use is to feed it an assembler filename ending in .asm. It will create output 
+files with the filename, replacing .asm with .lst, hex and .sym for the listing, the
+intelhex output and the symbol table files.
+
+E.G.
+
+> 6502asm maze_10print.asm
+Assembling from file: maze_10print.asm
+Listing writing to:  maze_10print.lst
+Symbol table written to:  maze_10print.sym
+Intel Hex object code written to:  maze_10print.hex
+
+If the output files already exist, it will create unique output filenames by incrementing
+a counter in the filename.
+
+E.G. maze_10print.lst leads to maze_10print(1).lst which leads to maze_10print(2).lst
+and so on.
+
 --------------------------------------------
 Comments to dj@deadhat.com
 
