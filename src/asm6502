@@ -3,6 +3,7 @@
 #
 
 import re
+import sys
 
 class asm6502():
     def __init__(self, debug=0):
@@ -1448,10 +1449,10 @@ class asm6502():
         theoutput.append(eofrecord)
         return theoutput
 
-    def print_intelhex(self):
+    def print_intelhex(self,file=sys.stdout):
         lines = self.intelhex()
         for line in lines:
-            print(line)
+            print(line,file=file)
 
     # returns entire 64K memory as hex in the form of 64 bytes per line.
     def hex(self, noaddress=False):

@@ -1,0 +1,6 @@
+SYMBOL TABLE
+start      = $0204
+loop       = $020C
+nofb       = $0213
+store      = $021B
+skiphi     = $0225

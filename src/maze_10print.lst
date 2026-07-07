@@ -1,0 +1,33 @@
+LISTING
+1    0200 :                  org $0200     
+2    0200 :                                
+3    0200 :         A9 A5    lda #$A5      ; LFSR seed (must be non-zero)
+4    0202 :         85 12    sta $12       
+5    0204 : start:                         
+6    0204 :         A9 00    lda #$00      ; screen pointer low  = $00
+7    0206 :         85 10    sta $10       
+8    0208 :         A9 08    lda #$08      ; screen pointer high = $08  -> $0800
+9    020A :         85 11    sta $11       
+10   020C :                                
+11   020C : loop:   A5 12    lda $12       ; advance the LFSR
+12   020E :         4A       lsr A         ;   C = bit shifted out
+13   020F :         90 02    bcc nofb      
+14   0211 :         49 B8    eor #$B8      ;   feedback tap for maximal length
+15   0213 : nofb:   85 12    sta $12       
+16   0215 :                                
+17   0215 :         A9 06    lda #$06      ; assume '/'
+18   0217 :         90 02    bcc store     ; ...unless the shifted-out bit was 1
+19   0219 :         A9 07    lda #$07      ; then '\'
+20   021B : store:  A0 00    ldy #$00      
+21   021D :         91 10    sta ($10),Y   ; write character to the screen
+22   021F :                                
+23   021F :         E6 10    inc $10       ; advance pointer
+24   0221 :         D0 02    bne skiphi    
+25   0223 :         E6 11    inc $11       
+26   0225 : skiphi: A5 11    lda $11       
+27   0227 :         C9 0D    cmp #$0D      ; reached $0D00 (one past the screen)?
+28   0229 :         D0 E1    bne loop      
+29   022B :                                
+30   022B :         4C 04 02 jmp start     
+31   022E :                  db  $02       ; KIL: halt the simulator now the screen is full
+31   022E :         02
