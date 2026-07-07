@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "py6502"
+version = "1.0.0"
+description = "A 6502/65C02 assembler, disassembler, simulator and debugger in Python"
+readme = "README.txt"
+license = "BSD-2-Clause"
+license-files = ["License.txt"]
+authors = [
+    { name = "David Johnston", email = "dj@deadhat.com" },
+]
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Assemblers",
+    "Topic :: System :: Emulators",
+]
+
+[project.urls]
+Homepage = "https://github.com/dj-on-github/py6502"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+py-modules = ["asm6502", "dis6502", "sim6502", "memory_map"]
