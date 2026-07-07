@@ -480,6 +480,32 @@ a counter in the filename.
 E.G. maze_10print.lst leads to maze_10print(1).lst which leads to maze_10print(2).lst
 and so on.
 
+Making asm6502, dis6502 and sim6502 available in externally managed environments
+--------------------------------------------------------------------------------
+
+To make the python libraries available outside the source directory can be done
+with pip.
+
+> git clone https://github.com/dj-on-github/py6502
+> cd py6502
+> pip install .
+
+However this won't work in many situations because the system installed python
+is "externally managed". 
+
+The method that works for me is to pass --user (to install in my user file area) and
+--break-system-packages to get it to add them there even though the python being
+used is externally managed.
+
+> git clone https://github.com/dj-on-github/py6502
+> cd py6502
+> python3 -m pip install --user --break-system-packages .
+
+And to get the command line 6502asm program available for the local user:
+> cp src/6502asm ~/bin
+
+or for site wide, put it whereever system wide binaries go.
+
 --------------------------------------------
 Comments to dj@deadhat.com
 
@@ -492,6 +518,7 @@ TBD 2: Write an output generator for more of the flash/prom/eeprom programming f
 DONE!
 
 TBD 3: Give it decent error handling
+Well it's better, but I wouldn't call it "good".
 
 TBD 4: Set up a unit test bench to fuzz it with code and do directed tests.
 Done!
