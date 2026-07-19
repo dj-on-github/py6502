@@ -3,6 +3,8 @@
 
 import argparse
 import sys
+import json
+
 from asm6502 import asm6502
 from pathlib import Path
 
@@ -88,8 +90,10 @@ ihex_file = open(ihex_filename,"w")
 
 if args.symbol_filename:
     symbol_filename=args.symbol_filename
+    symbol_json_filename=args.symbol_filename+".json"
 else:
     symbol_filename = get_unique_filename(file_prefix_l+".sym")
+    symbol_json_filename = get_unique_filename(file_prefix_l+"_sym.json")
 
 symbol_file = open(symbol_filename,"w")
 
@@ -104,6 +108,8 @@ lines = f.readlines()
 
 a = asm6502()
 (lst,sym) = a.assemble(lines)
+symdict = a.symbols
+print(type(symdict))
 
 # inspect output
 for line in lst:
@@ -115,6 +121,10 @@ for symbol in sym:
     print(symbol, file=symbol_file)
 symbol_file.close()
 print("Symbol table written to: ",symbol_filename)
+
+with open(symbol_json_filename, "w", encoding="utf-8") as file:
+    json.dump(symdict, file, indent=4)
+print("Symbol JSON written to: ",symbol_json_filename)
 
 a.print_intelhex(file=ihex_file)
 ihex_file.close()
